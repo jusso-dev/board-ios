@@ -132,7 +132,7 @@ After one client pairs, the server no longer prints a first-client code. Existin
 
 ## Repository selection and search
 
-Board opens with **All work** selected. This is the complete cross-repository queue returned by Board API 0.3.0 or newer. Every row shows its `owner/repository`, issue number, column, latest harness/job state, and a pull-request link when one was actually recorded. The summary at the top counts running, pending, review, and affected repositories. Cards are grouped in operational order: Running, Ready, Review, Backlog, then Done.
+Board opens with **All work** selected. This is the cross-repository queue returned by Board API 0.5.0. Every row shows its `owner/repository`, issue number, column, latest harness/job state, and a pull-request link when one was actually recorded. The summary at the top counts running, pending, review, and affected repositories. Cards are grouped in operational order: Running, Ready, Review, Backlog, then Done.
 
 The repository button is now a filter, not a required first choice. Choose **All work** to return to the overview, or choose one repository for its five-column kanban. The sheet search is always visible and matches:
 
@@ -157,9 +157,9 @@ GitHub issues are the only cards. Board API maps these labels to the five column
 | Review | `board:review` |
 | Done | `board:done` |
 
-The app calls `GET /v1/overview` immediately after linking or launching with saved credentials. The API searches all pushable repositories available to its GitHub identity, globally sorts labelled open issues by update time, and paginates the result. This means running and pending work from personal repositories, other organisations, and direct collaborations is visible before you select a project. If one GitHub owner cannot be searched, the API marks the response partial and the app shows a warning instead of implying the list is complete.
+The app calls `GET /v1/overview` immediately after linking or launching with saved credentials. The API searches all pushable repositories available to its GitHub identity, globally sorts labelled open issues by update time, and paginates one shared 60-second snapshot. This means running and pending work from personal repositories, other organisations, and direct collaborations is visible before you select a project. If one GitHub owner cannot be refreshed, the API lists it in `unavailableOwners`, retains its older cached cards when possible, and the app shows one compact inline warning. Cards from successful owners still load; no alert blocks the board.
 
-The app reloads the overview when linked and when you use Refresh. It loads a single repository when that filter is selected. There is no timer-based polling in the iOS app. The server performs a fresh GitHub issue search for overview/card reads, so an issue created by Grokbot or another GitHub client appears on the next refresh when it is open and has one `board:*` column label.
+The app reloads the overview when linked and when you use Refresh. It loads a single repository when that filter is selected. There is no timer-based polling in the iOS app. Overview pagination, concurrent app requests, and automatic Ready pickup share one server snapshot, preventing GitHub's search quota from being spent once per owner for every request. An issue created by Grokbot or another GitHub client appears after the next snapshot refresh when it is open and has one `board:*` column label.
 
 Creating a card calls `POST /v1/cards`. Moving a card calls `PATCH /v1/cards/{number}` and updates the interface optimistically. If the request fails, the card rolls back to its previous column and an error is shown.
 
@@ -267,7 +267,8 @@ Cached cards remain readable offline. Creating, moving, running, and cancelling 
 - **Health fails:** confirm the phone can reach the guest, use `http` with `:8787` for the direct listener, and test the same URL in Safari or with `curl` from another Tailscale device.
 - **Pairing fails:** use the current unexpired code, preserve all eight characters, and confirm no client already consumed it.
 - **Repository missing:** run `gh auth status` as user `board` on the guest and check organisation SSO or token scope.
-- **Cards missing from All work:** refresh, check for a partial-overview warning, then confirm the open issue has a supported `board:*` label and the server's GitHub identity can push to that repository.
+- **Refresh warning:** cards remain usable. Named GitHub owners could not be refreshed, normally because GitHub Search is temporarily limited; the server retains their last snapshot and retries after the 60-second cache window.
+- **Cards missing from All work:** wait 60 seconds and refresh, then confirm the open issue has a supported `board:*` label and the server's GitHub identity can push to that repository.
 - **Ready card did not start:** confirm server automation is enabled, the original GitHub issue author is allowed by `allowedIssueAuthors`, use at most one of `agent:grok`, `agent:codex`, or `agent:cursor`, and inspect `journalctl -u board-api`.
 - **Job returns 403:** the original GitHub issue author is not trusted by the server. Recreate the issue using an allowed GitHub identity; changing labels or assignees cannot bypass this check.
 - **Harness missing:** install and sign in to that CLI as user `board`; the iOS app cannot hold or repair vendor credentials.

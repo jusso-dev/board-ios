@@ -3,13 +3,22 @@ import Foundation
 actor MockBoardAPIClient: BoardAPIClientProtocol {
     private let serverID: UUID
     private let failMoves: Bool
+    private let overviewUnavailableOwners: [String]
+    private let delaysOverview: Bool
     private var cardsByRepo: [String: [Card]]
+    private var overviewRequestCount = 0
     private var jobValues: [JobRecord] = []
     private var eventValues: [UUID: [JobEvent]] = [:]
 
-    init(failMoves: Bool = false) {
+    init(
+        failMoves: Bool = false,
+        overviewUnavailableOwners: [String] = [],
+        delaysOverview: Bool = false
+    ) {
         self.serverID = Self.uuid("9a7cb1f6-37f4-4d9b-8a40-d7ab8f53a19c")
         self.failMoves = failMoves
+        self.overviewUnavailableOwners = overviewUnavailableOwners
+        self.delaysOverview = delaysOverview
         let now = Date()
         self.cardsByRepo = [
             "jusso-dev/board-api": [
@@ -144,7 +153,11 @@ actor MockBoardAPIClient: BoardAPIClientProtocol {
         )
     }
 
-    func overview(baseURL: URL, page: Int, perPage: Int) -> OverviewPage {
+    func overview(baseURL: URL, page: Int, perPage: Int) async -> OverviewPage {
+        overviewRequestCount += 1
+        if delaysOverview {
+            try? await Task.sleep(for: .milliseconds(100))
+        }
         let values = cardsByRepo
             .flatMap { repo, cards in cards.map { RepositoryCard(repo: repo, card: $0) } }
             .sorted { $0.card.updatedAt > $1.card.updatedAt }
@@ -152,7 +165,14 @@ actor MockBoardAPIClient: BoardAPIClientProtocol {
         let safePerPage = min(max(perPage, 1), 50)
         let start = (safePage - 1) * safePerPage
         guard start < values.count else {
-            return OverviewPage(items: [], page: safePage, perPage: safePerPage, hasMore: false, partial: false)
+            return OverviewPage(
+                items: [],
+                page: safePage,
+                perPage: safePerPage,
+                hasMore: false,
+                partial: !overviewUnavailableOwners.isEmpty,
+                unavailableOwners: overviewUnavailableOwners
+            )
         }
         let end = min(start + safePerPage, values.count)
         return OverviewPage(
@@ -160,8 +180,17 @@ actor MockBoardAPIClient: BoardAPIClientProtocol {
             page: safePage,
             perPage: safePerPage,
             hasMore: end < values.count,
-            partial: false
+            partial: !overviewUnavailableOwners.isEmpty,
+            unavailableOwners: overviewUnavailableOwners
         )
+    }
+
+    func resetOverviewRequestCount() {
+        overviewRequestCount = 0
+    }
+
+    func overviewRequests() -> Int {
+        overviewRequestCount
     }
 
     func createCard(baseURL: URL, request: CreateCardRequest) -> Card {

@@ -89,12 +89,23 @@ struct WorkOverviewView: View {
 
     private var partialWarning: some View {
         Label(
-            "Some GitHub owners could not be loaded. The visible cards are only a partial overview.",
+            partialWarningText,
             systemImage: "exclamationmark.triangle.fill"
         )
         .font(.footnote)
         .foregroundStyle(.orange)
         .accessibilityIdentifier("overview-partial-warning")
+    }
+
+    private var partialWarningText: String {
+        let owners = model.overviewUnavailableOwners
+        guard !owners.isEmpty else {
+            return "GitHub refresh was limited. Showing latest available cards; try again later."
+        }
+        let shown = owners.prefix(3).joined(separator: ", ")
+        let remainder = owners.count - min(owners.count, 3)
+        let suffix = remainder > 0 ? " and \(remainder) more" : ""
+        return "Could not refresh \(shown)\(suffix). Showing latest available cards; try again later."
     }
 }
 

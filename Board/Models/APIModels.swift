@@ -174,6 +174,7 @@ struct OverviewPage: Codable, Equatable, Sendable {
     let perPage: Int
     let hasMore: Bool
     let partial: Bool
+    let unavailableOwners: [String]
 }
 
 struct CreateCardRequest: Codable, Equatable, Sendable {

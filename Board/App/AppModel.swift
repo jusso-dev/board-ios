@@ -27,6 +27,7 @@ final class AppModel {
     private(set) var isLoadingBoard = false
     private(set) var isLoadingOverview = false
     private(set) var isOverviewPartial = false
+    private(set) var overviewUnavailableOwners: [String] = []
     private(set) var isOffline = false
     private(set) var currentBaseURL: URL?
     var notice: Notice?
@@ -155,7 +156,7 @@ final class AppModel {
     }
 
     func loadOverview() async {
-        guard let baseURL = currentBaseURL else { return }
+        guard let baseURL = currentBaseURL, !isLoadingOverview else { return }
         isLoadingOverview = true
         defer { isLoadingOverview = false }
 
@@ -164,26 +165,24 @@ final class AppModel {
             var page = 1
             var hasMore: Bool
             var partial = false
+            var unavailableOwners = Set<String>()
             repeat {
                 let response = try await api.overview(baseURL: baseURL, page: page, perPage: 50)
                 values.append(contentsOf: response.items)
                 hasMore = response.hasMore
                 partial = partial || response.partial
+                unavailableOwners.formUnion(response.unavailableOwners)
                 page += 1
             } while hasMore
 
             guard selectedRepo == nil else { return }
             overviewCards = values.sorted { $0.card.updatedAt > $1.card.updatedAt }
             isOverviewPartial = partial
-            isOffline = false
-            if partial {
-                notice = Notice(
-                    title: "Overview incomplete",
-                    message: "GitHub did not return every owner. The cards shown are available, but refresh after checking organisation access."
-                )
-            } else {
-                try? await cache.saveOverview(cards: overviewCards)
+            overviewUnavailableOwners = unavailableOwners.sorted {
+                $0.localizedCaseInsensitiveCompare($1) == .orderedAscending
             }
+            isOffline = false
+            try? await cache.saveOverview(cards: overviewCards)
         } catch {
             if isAuthenticationError(error) {
                 await forgetLink(clearCache: false)
@@ -192,6 +191,7 @@ final class AppModel {
             if let cached = try? await cache.loadOverview(), selectedRepo == nil {
                 overviewCards = cached.cards
                 isOverviewPartial = false
+                overviewUnavailableOwners = []
                 isOffline = true
                 notice = Notice(
                     title: "Offline",
@@ -545,6 +545,7 @@ final class AppModel {
         currentBaseURL = nil
         isOffline = false
         isOverviewPartial = false
+        overviewUnavailableOwners = []
         phase = .needsLink
     }
 

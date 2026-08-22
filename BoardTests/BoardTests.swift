@@ -86,7 +86,8 @@ struct APIDecodingTests {
               "page": 1,
               "perPage": 50,
               "hasMore": false,
-              "partial": false
+              "partial": true,
+              "unavailableOwners": ["offline-org"]
             }
             """.data(using: .utf8)
         )
@@ -95,7 +96,8 @@ struct APIDecodingTests {
         #expect(page.items.first?.repo == "other-org/operations")
         #expect(page.items.first?.card.column == .running)
         #expect(page.items.first?.id == "other-org/operations#7")
-        #expect(!page.partial)
+        #expect(page.partial)
+        #expect(page.unavailableOwners == ["offline-org"])
     }
 
     @Test("Job record decodes exact server status and prUrl")
@@ -277,6 +279,39 @@ struct AppModelTests {
         let job = try #require(model.latestJob(for: card))
         #expect(job.status == .running)
         #expect(job.harness == .codex)
+    }
+
+    @Test("Partial overview keeps cards visible without a blocking notice")
+    func partialOverviewKeepsCardsVisible() async throws {
+        let model = makeModel(api: MockBoardAPIClient(overviewUnavailableOwners: ["offline-org"]))
+        _ = try await model.link(
+            baseURLString: "http://192.168.1.10:8787",
+            code: runtimePairCode()
+        )
+
+        #expect(!model.overviewCards.isEmpty)
+        #expect(model.isOverviewPartial)
+        #expect(model.overviewUnavailableOwners == ["offline-org"])
+        #expect(model.notice == nil)
+    }
+
+    @Test("Concurrent overview loads make one API request")
+    func concurrentOverviewLoadsCoalesce() async throws {
+        let api = MockBoardAPIClient(delaysOverview: true)
+        let model = makeModel(api: api)
+        _ = try await model.link(
+            baseURLString: "http://192.168.1.10:8787",
+            code: runtimePairCode()
+        )
+        await api.resetOverviewRequestCount()
+
+        let first = Task { @MainActor in await model.loadOverview() }
+        try? await Task.sleep(for: .milliseconds(10))
+        let second = Task { @MainActor in await model.loadOverview() }
+        await first.value
+        await second.value
+
+        #expect(await api.overviewRequests() == 1)
     }
 
     @Test("Failed optimistic move rolls the card back")
