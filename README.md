@@ -163,7 +163,7 @@ The app reloads the overview when linked and when you use Refresh. It loads a si
 
 Creating a card calls `POST /v1/cards`. Moving a card calls `PATCH /v1/cards/{number}` and updates the interface optimistically. If the request fails, the card rolls back to its previous column and an error is shown.
 
-On Board API 0.2.0 or newer with `autoRun.enabled`, creating or moving a card to Ready starts a server job immediately. A Ready issue created directly on GitHub is selected by the server's background scan. Harness routing comes from the issue labels:
+On Board API 0.4.0 or newer with `autoRun.enabled`, creating or moving a card to Ready starts a server job immediately only when its immutable GitHub issue author appears in the server's `allowedIssueAuthors` list. A Ready issue created directly on GitHub is selected by the server's background scan under the same rule. Labels, assignees, comments, and the person who moved the card cannot grant execution permission. Harness routing comes from the issue labels:
 
 - `agent:grok`, `agent:codex`, or `agent:cursor` selects that harness;
 - no `agent:*` label uses the server's configured default, normally Codex;
@@ -268,7 +268,8 @@ Cached cards remain readable offline. Creating, moving, running, and cancelling 
 - **Pairing fails:** use the current unexpired code, preserve all eight characters, and confirm no client already consumed it.
 - **Repository missing:** run `gh auth status` as user `board` on the guest and check organisation SSO or token scope.
 - **Cards missing from All work:** refresh, check for a partial-overview warning, then confirm the open issue has a supported `board:*` label and the server's GitHub identity can push to that repository.
-- **Ready card did not start:** confirm server automation is enabled, use at most one of `agent:grok`, `agent:codex`, or `agent:cursor`, and inspect `journalctl -u board-api`.
+- **Ready card did not start:** confirm server automation is enabled, the original GitHub issue author is allowed by `allowedIssueAuthors`, use at most one of `agent:grok`, `agent:codex`, or `agent:cursor`, and inspect `journalctl -u board-api`.
+- **Job returns 403:** the original GitHub issue author is not trusted by the server. Recreate the issue using an allowed GitHub identity; changing labels or assignees cannot bypass this check.
 - **Harness missing:** install and sign in to that CLI as user `board`; the iOS app cannot hold or repair vendor credentials.
 - **Job returns 409:** open the existing job for that repository or cancel it before starting another.
 - **Job says completed but has no PR:** treat it as unverified. Board API 0.2.0 prevents new zero-change runs from succeeding; update the server and retry the issue from Ready.
