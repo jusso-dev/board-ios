@@ -86,10 +86,35 @@ struct APIDecodingTests {
             }
             """.data(using: .utf8)
         )
-        let job = try BoardJSON.decoder().decode(JobRecord.self, from: data)
+        var job = try BoardJSON.decoder().decode(JobRecord.self, from: data)
         #expect(job.status == .succeeded)
         #expect(job.crew == [.codex, .cursor])
         #expect(job.prURL?.path == "/jusso-dev/board-api/pull/7")
+        #expect(!job.hasUnverifiedSuccess)
+        #expect(job.outcomeSummary.contains("opened a pull request"))
+        job.status = .failed
+        #expect(job.outcomeSummary.contains("pull request exists"))
+    }
+
+    @Test("Completed job without prUrl is explicitly unverified")
+    func identifiesUnverifiedJob() {
+        let job = JobRecord(
+            id: UUID(),
+            repo: "jusso-dev/board-api",
+            issue: 42,
+            harness: .grok,
+            crew: [],
+            status: .succeeded,
+            branch: "board/42-example",
+            worktree: "/home/board/work/example",
+            prURL: nil,
+            createdAt: Date(),
+            startedAt: Date(),
+            finishedAt: Date(),
+            error: nil
+        )
+        #expect(job.hasUnverifiedSuccess)
+        #expect(job.outcomeSummary.contains("not verified"))
     }
 
     @Test("SSE parser ignores framing and decodes data events")

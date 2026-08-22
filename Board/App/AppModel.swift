@@ -256,6 +256,10 @@ final class AppModel {
             )
             cards.insert(value, at: 0)
             try? await cache.save(repo: selectedRepo, cards: cards)
+            if column == .ready {
+                await refreshJobs(showError: false)
+                await loadCard(number: value.number)
+            }
             return true
         } catch {
             handle(error, title: "Card not created")
@@ -294,6 +298,10 @@ final class AppModel {
                 upsert(updated)
                 pendingMoves[number] = nil
                 try? await cache.save(repo: selectedRepo, cards: cards)
+            }
+            if column == .ready {
+                await refreshJobs(showError: false)
+                await loadCard(number: number)
             }
             return true
         } catch {

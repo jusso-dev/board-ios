@@ -68,6 +68,11 @@ struct JobView: View {
                 LabeledContent("Run order", value: job.crew.map(\.title).joined(separator: " → "))
             }
 
+            Label(job.outcomeSummary, systemImage: job.outcomeSystemImage)
+                .font(.subheadline)
+                .foregroundStyle(outcomeColour(for: job))
+                .fixedSize(horizontal: false, vertical: true)
+
             if let error = job.error, job.status == .failed {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
                     .font(.subheadline)
@@ -86,6 +91,13 @@ struct JobView: View {
         .padding(16)
         .background(Color(.secondarySystemGroupedBackground))
         .accessibilityElement(children: .contain)
+    }
+
+    private func outcomeColour(for job: JobRecord) -> Color {
+        if job.hasUnverifiedSuccess {
+            return .orange
+        }
+        return job.status.tint
     }
 
     private var logView: some View {

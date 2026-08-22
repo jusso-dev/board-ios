@@ -17,10 +17,9 @@ struct CardDetailView: View {
         }
         .navigationTitle("Issue #\(number)")
         .navigationBarTitleDisplayMode(.inline)
-        .task {
-            if model.card(number: number) == nil {
-                await model.loadCard(number: number)
-            }
+        .task(id: number) {
+            await model.loadCard(number: number)
+            await model.refreshJobs(showError: false)
         }
         .sheet(isPresented: $showsRunSheet) {
             RunJobSheet(issue: number) { job in
@@ -60,6 +59,16 @@ struct CardDetailView: View {
                     Text("Updated \(card.updatedAt.formatted(.relative(presentation: .named)))")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+
+                    if card.column == .review {
+                        Text("Review is a board label. Verify the pull request in Last job below.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else if card.column == .done {
+                        Text("Done is a board label. It does not prove that a pull request was opened or merged.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 Divider()
@@ -154,7 +163,22 @@ struct CardDetailView: View {
                         Label("Open pull request", systemImage: "arrow.up.right.square")
                     }
                 }
+
+                Label(
+                    job.outcomeSummary,
+                    systemImage: job.outcomeSystemImage
+                )
+                .font(.subheadline)
+                .foregroundStyle(job.hasUnverifiedSuccess ? .orange : job.status.tint)
+                .fixedSize(horizontal: false, vertical: true)
             }
+        } else if card.column == .review || card.column == .done {
+            Label(
+                "No server job record is available for this issue. Open GitHub before treating the work as delivered.",
+                systemImage: "exclamationmark.triangle.fill"
+            )
+            .font(.subheadline)
+            .foregroundStyle(.orange)
         }
     }
 }

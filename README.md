@@ -16,8 +16,10 @@ The app talks only to Board API over LAN or Tailscale. It does not contain a Git
 - Searches repository owner, name, and description locally as you type.
 - Displays open GitHub issues in `backlog`, `ready`, `running`, `review`, and `done`.
 - Creates cards and moves them with drag and drop or explicit move actions.
+- Moving a card to Ready asks an automation-enabled server to start it immediately.
 - Starts `grok`, `codex`, or `cursor` jobs on the server, including an ordered sequential crew.
 - Streams job logs and status with server-sent events and can cancel a running job.
+- Shows whether a pull request actually exists; a completed job without one is marked unverified.
 - Keeps the last successful card list on disk for offline reading.
 
 The phone never clones a repository or executes a coding CLI. It is a focused remote control for the homelab service.
@@ -155,6 +157,16 @@ The app loads cards when a linked session starts, when the selected repository c
 
 Creating a card calls `POST /v1/cards`. Moving a card calls `PATCH /v1/cards/{number}` and updates the interface optimistically. If the request fails, the card rolls back to its previous column and an error is shown.
 
+On Board API 0.2.0 or newer with `autoRun.enabled`, creating or moving a card to Ready starts a server job immediately. A Ready issue created directly on GitHub is selected by the server's background scan. Harness routing comes from the issue labels:
+
+- `agent:grok`, `agent:codex`, or `agent:cursor` selects that harness;
+- no `agent:*` label uses the server's configured default, normally Codex;
+- multiple or unknown `agent:*` labels are rejected by the automation worker.
+
+The app refreshes the card and job list after moving to Ready so the queued or running server job becomes visible. The app itself does not poll GitHub in the background.
+
+Review and Done remain GitHub labels, not delivery proof. The card detail screen says this explicitly. Done does not mean that GitHub has a pull request or that it was merged.
+
 ## Start and follow a job
 
 Open a card and tap Run, then choose:
@@ -165,7 +177,7 @@ Open a card and tap Run, then choose:
 
 `POST /v1/jobs` starts the work on the Ubuntu guest. The job screen consumes `GET /v1/jobs/{id}/events` as a server-sent event stream and shows status and log lines. Cancel calls `POST /v1/jobs/{id}/cancel`.
 
-Only one job may run per repository. A `409 Conflict` makes the app show the existing job rather than pretending a second run started. Successful jobs display `prUrl` when the server created a pull request. Failed jobs retain the log tail for diagnosis.
+Only one job may run per repository. A `409 Conflict` makes the app show the existing job rather than pretending a second run started. A successful Board API 0.2.0 job has a non-null `prUrl`; the app displays a labelled pull-request link. Failed jobs state whether no pull request was opened or finalisation failed after one was created. If an older or inconsistent server reports `succeeded` with a null `prUrl`, the app shows an orange unverified warning instead of presenting that state as delivered work.
 
 ## Network and ATS policy
 
@@ -198,7 +210,7 @@ Authenticated requests send `Authorization: Bearer board_...`. JSON keys remain 
 - The API does not return issue comments, so card details state that comments are unavailable.
 - Cards do not embed active jobs or pull requests. The app joins cards to `GET /v1/jobs` by repository and issue number.
 - Current API statuses are `queued`, `running`, `cancelling`, `cancelled`, `succeeded`, and `failed`.
-- A successful job shows `prUrl` when supplied. The client does not invent `pr_open` or `done` status values.
+- A successful 0.2.0 server job supplies `prUrl`. A `succeeded` record without it is shown as unverified. The client does not invent `pr_open` or `done` status values.
 - `/v1/keys` exists in the server contract but is not used by the app. Minting additional keys remains an authenticated server operation.
 
 ## Architecture
@@ -233,6 +245,7 @@ Cached cards remain readable offline. Creating, moving, running, and cancelling 
 
 - base URL and ATS policy;
 - OpenAPI model decoding;
+- explicit detection of a completed job with no pull request;
 - cross-organisation repository search;
 - server-sent event decoding;
 - Keychain persistence;
@@ -247,8 +260,10 @@ Cached cards remain readable offline. Creating, moving, running, and cancelling 
 - **Pairing fails:** use the current unexpired code, preserve all eight characters, and confirm no client already consumed it.
 - **Repository missing:** run `gh auth status` as user `board` on the guest and check organisation SSO or token scope.
 - **Cards missing:** refresh, then confirm each open issue has exactly one supported `board:*` label.
+- **Ready card did not start:** confirm server automation is enabled, use at most one of `agent:grok`, `agent:codex`, or `agent:cursor`, and inspect `journalctl -u board-api`.
 - **Harness missing:** install and sign in to that CLI as user `board`; the iOS app cannot hold or repair vendor credentials.
 - **Job returns 409:** open the existing job for that repository or cancel it before starting another.
+- **Job says completed but has no PR:** treat it as unverified. Board API 0.2.0 prevents new zero-change runs from succeeding; update the server and retry the issue from Ready.
 
 ## License
 

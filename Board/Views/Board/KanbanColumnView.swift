@@ -143,6 +143,12 @@ private struct CardTile: View {
                         .foregroundStyle(job.status.tint)
                         .lineLimit(1)
                     StatusPill(status: job.status)
+                    if job.status.isTerminal, job.prURL == nil {
+                        Label("No PR", systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(job.hasUnverifiedSuccess ? Color.orange : job.status.tint)
+                            .accessibilityLabel("No pull request was opened")
+                    }
                 }
 
                 Spacer(minLength: 4)

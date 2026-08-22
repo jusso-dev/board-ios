@@ -212,6 +212,44 @@ struct JobRecord: Codable, Identifiable, Equatable, Hashable, Sendable {
     }
 }
 
+extension JobRecord {
+    var outcomeSummary: String {
+        switch status {
+        case .queued:
+            "The job is queued. No pull request exists yet."
+        case .running:
+            "The agent is working. No pull request exists yet."
+        case .cancelling:
+            "Cancellation is in progress."
+        case .cancelled:
+            "The job was cancelled. No pull request was opened."
+        case .failed where prURL != nil:
+            "A pull request exists, but the job failed during finalisation. Review the error before merging."
+        case .failed:
+            "The job failed. No pull request was opened."
+        case .succeeded where prURL != nil:
+            "The agent opened a pull request. Review it before moving this card to Done."
+        case .succeeded:
+            "The server recorded completion, but no pull request exists. This work is not verified."
+        }
+    }
+
+    var hasUnverifiedSuccess: Bool {
+        status == .succeeded && prURL == nil
+    }
+
+    var outcomeSystemImage: String {
+        if prURL != nil {
+            return "checkmark.circle.fill"
+        }
+        return switch status {
+        case .queued, .running, .cancelling: "clock"
+        case .cancelled: "stop.circle"
+        case .succeeded, .failed: "exclamationmark.triangle.fill"
+        }
+    }
+}
+
 struct JobEvent: Codable, Identifiable, Equatable, Hashable, Sendable {
     enum Kind: String, Codable, Sendable {
         case status
