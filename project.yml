@@ -1,0 +1,66 @@
+name: Board
+
+options:
+  bundleIdPrefix: au.com.yumait
+  deploymentTarget:
+    iOS: "18.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    IPHONEOS_DEPLOYMENT_TARGET: "18.0"
+    TARGETED_DEVICE_FAMILY: "1,2"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+
+targets:
+  Board:
+    type: application
+    platform: iOS
+    sources:
+      - path: Board
+        excludes:
+          - Resources/Info.plist
+          - Resources/Assets.xcassets
+    resources:
+      - path: Board/Resources/Assets.xcassets
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: au.com.yumait.board
+        PRODUCT_NAME: Board
+        INFOPLIST_FILE: Board/Resources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Board/Resources/Board.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+    scheme:
+      testTargets:
+        - BoardTests
+        - BoardUITests
+
+  BoardTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: BoardTests
+    dependencies:
+      - target: Board
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: au.com.yumait.board.tests
+        GENERATE_INFOPLIST_FILE: YES
+
+  BoardUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: BoardUITests
+    dependencies:
+      - target: Board
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: au.com.yumait.board.uitests
+        GENERATE_INFOPLIST_FILE: YES
