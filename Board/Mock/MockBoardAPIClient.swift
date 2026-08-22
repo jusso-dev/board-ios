@@ -3,7 +3,7 @@ import Foundation
 actor MockBoardAPIClient: BoardAPIClientProtocol {
     private let serverID: UUID
     private let failMoves: Bool
-    private var cardValues: [Card]
+    private var cardsByRepo: [String: [Card]]
     private var jobValues: [JobRecord] = []
     private var eventValues: [UUID: [JobEvent]] = [:]
 
@@ -11,7 +11,8 @@ actor MockBoardAPIClient: BoardAPIClientProtocol {
         self.serverID = Self.uuid("9a7cb1f6-37f4-4d9b-8a40-d7ab8f53a19c")
         self.failMoves = failMoves
         let now = Date()
-        self.cardValues = [
+        self.cardsByRepo = [
+            "jusso-dev/board-api": [
             Card(
                 number: 42,
                 title: "Add deployment health evidence",
@@ -32,6 +33,40 @@ actor MockBoardAPIClient: BoardAPIClientProtocol {
                 createdAt: now.addingTimeInterval(-172_800),
                 updatedAt: now.addingTimeInterval(-7_200)
             )
+            ],
+            "other-org/operations": [
+                Card(
+                    number: 7,
+                    title: "Repair the production deployment",
+                    body: "The organisation runner is applying the approved fix.",
+                    column: .running,
+                    labels: [BoardColumn.running.rawValue, "agent:codex"],
+                    url: Self.url("https://github.com/other-org/operations/issues/7"),
+                    createdAt: now.addingTimeInterval(-259_200),
+                    updatedAt: now.addingTimeInterval(-300)
+                )
+            ]
+        ]
+        let runningJobID = Self.uuid("f5bf5ed8-09b8-4bd0-bcad-7a4fbcc9b4d1")
+        self.jobValues = [
+            JobRecord(
+                id: runningJobID,
+                repo: "other-org/operations",
+                issue: 7,
+                harness: .codex,
+                crew: [.codex],
+                status: .running,
+                branch: "board/7-f5bf5ed8",
+                worktree: "/home/board/work/other-org/operations/f5bf5ed8",
+                prURL: nil,
+                createdAt: now.addingTimeInterval(-600),
+                startedAt: now.addingTimeInterval(-590),
+                finishedAt: nil,
+                error: nil
+            )
+        ]
+        self.eventValues[runningJobID] = [
+            JobEvent(timestamp: now.addingTimeInterval(-590), kind: .status, line: JobStatus.running.rawValue)
         ]
     }
 
@@ -91,7 +126,7 @@ actor MockBoardAPIClient: BoardAPIClientProtocol {
         page: Int,
         perPage: Int
     ) -> CardPage {
-        let filtered = cardValues
+        let filtered = cardsByRepo[repo, default: []]
             .filter { column == nil || $0.column == column }
             .sorted { $0.number > $1.number }
         let safePage = max(page, 1)
@@ -109,8 +144,29 @@ actor MockBoardAPIClient: BoardAPIClientProtocol {
         )
     }
 
+    func overview(baseURL: URL, page: Int, perPage: Int) -> OverviewPage {
+        let values = cardsByRepo
+            .flatMap { repo, cards in cards.map { RepositoryCard(repo: repo, card: $0) } }
+            .sorted { $0.card.updatedAt > $1.card.updatedAt }
+        let safePage = max(page, 1)
+        let safePerPage = min(max(perPage, 1), 50)
+        let start = (safePage - 1) * safePerPage
+        guard start < values.count else {
+            return OverviewPage(items: [], page: safePage, perPage: safePerPage, hasMore: false, partial: false)
+        }
+        let end = min(start + safePerPage, values.count)
+        return OverviewPage(
+            items: Array(values[start..<end]),
+            page: safePage,
+            perPage: safePerPage,
+            hasMore: end < values.count,
+            partial: false
+        )
+    }
+
     func createCard(baseURL: URL, request: CreateCardRequest) -> Card {
-        let number = (cardValues.map(\.number).max() ?? 0) + 1
+        var values = cardsByRepo[request.repo, default: []]
+        let number = (values.map(\.number).max() ?? 0) + 1
         let now = Date()
         let value = Card(
             number: number,
@@ -118,11 +174,12 @@ actor MockBoardAPIClient: BoardAPIClientProtocol {
             body: request.body,
             column: request.column,
             labels: [request.column.rawValue],
-            url: Self.url("https://github.com/jusso-dev/board-api/issues/\(number)"),
+            url: Self.url("https://github.com/\(request.repo)/issues/\(number)"),
             createdAt: now,
             updatedAt: now
         )
-        cardValues.append(value)
+        values.append(value)
+        cardsByRepo[request.repo] = values
         return value
     }
 
@@ -130,18 +187,20 @@ actor MockBoardAPIClient: BoardAPIClientProtocol {
         if failMoves {
             throw BoardAPIError.server(statusCode: 503, code: "mock_move_failed", message: "The mock move failed.")
         }
-        guard let index = cardValues.firstIndex(where: { $0.number == number }) else {
+        var values = cardsByRepo[repo, default: []]
+        guard let index = values.firstIndex(where: { $0.number == number }) else {
             throw BoardAPIError.server(statusCode: 404, code: "not_found", message: "Card not found.")
         }
-        cardValues[index].column = column
-        cardValues[index].labels.removeAll { $0.hasPrefix("board:") }
-        cardValues[index].labels.append(column.rawValue)
-        cardValues[index].updatedAt = Date()
-        return cardValues[index]
+        values[index].column = column
+        values[index].labels.removeAll { $0.hasPrefix("board:") }
+        values[index].labels.append(column.rawValue)
+        values[index].updatedAt = Date()
+        cardsByRepo[repo] = values
+        return values[index]
     }
 
     func card(baseURL: URL, repo: String, number: Int) throws -> Card {
-        guard let card = cardValues.first(where: { $0.number == number }) else {
+        guard let card = cardsByRepo[repo, default: []].first(where: { $0.number == number }) else {
             throw BoardAPIError.server(statusCode: 404, code: "not_found", message: "Card not found.")
         }
         return card

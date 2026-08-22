@@ -21,9 +21,12 @@ final class AppModel {
     private(set) var repos: [Repo] = []
     private(set) var selectedRepo: String?
     private(set) var cards: [Card] = []
+    private(set) var overviewCards: [RepositoryCard] = []
     private(set) var jobs: [JobRecord] = []
     private(set) var eventsByJob: [UUID: [JobEvent]] = [:]
     private(set) var isLoadingBoard = false
+    private(set) var isLoadingOverview = false
+    private(set) var isOverviewPartial = false
     private(set) var isOffline = false
     private(set) var currentBaseURL: URL?
     var notice: Notice?
@@ -119,12 +122,10 @@ final class AppModel {
             repos = values.sorted { $0.nameWithOwner.localizedCaseInsensitiveCompare($1.nameWithOwner) == .orderedAscending }
             if let selectedRepo, repos.contains(where: { $0.nameWithOwner == selectedRepo }) {
                 await loadBoard(repo: selectedRepo)
-            } else if let first = repos.first {
-                selectedRepo = first.nameWithOwner
-                await loadBoard(repo: first.nameWithOwner)
             } else {
                 selectedRepo = nil
                 cards = []
+                await loadOverview()
             }
         } catch {
             handle(error, title: "Repositories unavailable")
@@ -138,10 +139,68 @@ final class AppModel {
         await loadBoard(repo: repo)
     }
 
+    func selectAllRepositories() async {
+        selectedRepo = nil
+        cards = []
+        await loadOverview()
+    }
+
     func reloadBoard() async {
-        guard let selectedRepo else { return }
         await refreshJobs(showError: false)
-        await loadBoard(repo: selectedRepo)
+        if let selectedRepo {
+            await loadBoard(repo: selectedRepo)
+        } else {
+            await loadOverview()
+        }
+    }
+
+    func loadOverview() async {
+        guard let baseURL = currentBaseURL else { return }
+        isLoadingOverview = true
+        defer { isLoadingOverview = false }
+
+        do {
+            var values: [RepositoryCard] = []
+            var page = 1
+            var hasMore: Bool
+            var partial = false
+            repeat {
+                let response = try await api.overview(baseURL: baseURL, page: page, perPage: 50)
+                values.append(contentsOf: response.items)
+                hasMore = response.hasMore
+                partial = partial || response.partial
+                page += 1
+            } while hasMore
+
+            guard selectedRepo == nil else { return }
+            overviewCards = values.sorted { $0.card.updatedAt > $1.card.updatedAt }
+            isOverviewPartial = partial
+            isOffline = false
+            if partial {
+                notice = Notice(
+                    title: "Overview incomplete",
+                    message: "GitHub did not return every owner. The cards shown are available, but refresh after checking organisation access."
+                )
+            } else {
+                try? await cache.saveOverview(cards: overviewCards)
+            }
+        } catch {
+            if isAuthenticationError(error) {
+                await forgetLink(clearCache: false)
+                return
+            }
+            if let cached = try? await cache.loadOverview(), selectedRepo == nil {
+                overviewCards = cached.cards
+                isOverviewPartial = false
+                isOffline = true
+                notice = Notice(
+                    title: "Offline",
+                    message: "Showing all-repository work saved on this phone. Changes need the server."
+                )
+            } else {
+                handle(error, title: "Work overview unavailable")
+            }
+        }
     }
 
     func loadBoard(repo: String) async {
@@ -216,6 +275,7 @@ final class AppModel {
         do {
             let value = try await api.card(baseURL: baseURL, repo: selectedRepo, number: number)
             upsert(value)
+            upsertOverview(value, repo: selectedRepo)
         } catch {
             handle(error, title: "Card unavailable")
         }
@@ -223,8 +283,16 @@ final class AppModel {
 
     func latestJob(for card: Card) -> JobRecord? {
         guard let selectedRepo else { return nil }
+        return latestJob(repo: selectedRepo, issue: card.number)
+    }
+
+    func latestJob(for card: RepositoryCard) -> JobRecord? {
+        latestJob(repo: card.repo, issue: card.card.number)
+    }
+
+    func latestJob(repo: String, issue: Int) -> JobRecord? {
         return jobs
-            .filter { $0.repo == selectedRepo && $0.issue == card.number }
+            .filter { $0.repo == repo && $0.issue == issue }
             .max { $0.createdAt < $1.createdAt }
     }
 
@@ -255,6 +323,7 @@ final class AppModel {
                 request: CreateCardRequest(repo: selectedRepo, title: cleanTitle, body: body, column: column)
             )
             cards.insert(value, at: 0)
+            upsertOverview(value, repo: selectedRepo)
             try? await cache.save(repo: selectedRepo, cards: cards)
             if column == .ready {
                 await refreshJobs(showError: false)
@@ -296,6 +365,7 @@ final class AppModel {
             )
             if pendingMoves[number] == moveID {
                 upsert(updated)
+                upsertOverview(updated, repo: selectedRepo)
                 pendingMoves[number] = nil
                 try? await cache.save(repo: selectedRepo, cards: cards)
             }
@@ -436,6 +506,16 @@ final class AppModel {
         }
     }
 
+    private func upsertOverview(_ card: Card, repo: String) {
+        let value = RepositoryCard(repo: repo, card: card)
+        if let index = overviewCards.firstIndex(where: { $0.id == value.id }) {
+            overviewCards[index] = value
+        } else {
+            overviewCards.insert(value, at: 0)
+        }
+        overviewCards.sort { $0.card.updatedAt > $1.card.updatedAt }
+    }
+
     private func upsert(_ job: JobRecord) {
         if let index = jobs.firstIndex(where: { $0.id == job.id }) {
             jobs[index] = job
@@ -459,10 +539,12 @@ final class AppModel {
         repos = []
         selectedRepo = nil
         cards = []
+        overviewCards = []
         jobs = []
         eventsByJob = [:]
         currentBaseURL = nil
         isOffline = false
+        isOverviewPartial = false
         phase = .needsLink
     }
 

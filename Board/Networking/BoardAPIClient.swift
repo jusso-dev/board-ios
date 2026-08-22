@@ -5,6 +5,7 @@ protocol BoardAPIClientProtocol: Sendable {
     func pair(baseURL: URL, code: String) async throws -> PairResponse
     func server(baseURL: URL) async throws -> ServerResponse
     func repos(baseURL: URL) async throws -> [Repo]
+    func overview(baseURL: URL, page: Int, perPage: Int) async throws -> OverviewPage
     func cards(baseURL: URL, repo: String, column: BoardColumn?, page: Int, perPage: Int) async throws -> CardPage
     func createCard(baseURL: URL, request: CreateCardRequest) async throws -> Card
     func moveCard(baseURL: URL, repo: String, number: Int, column: BoardColumn) async throws -> Card
@@ -97,6 +98,17 @@ actor BoardAPIClient: BoardAPIClientProtocol {
 
     func repos(baseURL: URL) async throws -> [Repo] {
         try await perform(baseURL: baseURL, path: "/v1/repos")
+    }
+
+    func overview(baseURL: URL, page: Int, perPage: Int) async throws -> OverviewPage {
+        try await perform(
+            baseURL: baseURL,
+            path: "/v1/overview",
+            query: [
+                URLQueryItem(name: "page", value: String(max(page, 1))),
+                URLQueryItem(name: "perPage", value: String(min(max(perPage, 1), 50)))
+            ]
+        )
     }
 
     func cards(

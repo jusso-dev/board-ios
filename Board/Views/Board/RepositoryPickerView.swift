@@ -5,6 +5,7 @@ struct RepositoryPickerView: View {
 
     let repositories: [Repo]
     let selectedRepository: String?
+    let onSelectAll: () -> Void
     let onSelect: (Repo) -> Void
 
     @State private var searchText = ""
@@ -16,11 +17,16 @@ struct RepositoryPickerView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if filteredRepositories.isEmpty {
+                if filteredRepositories.isEmpty && !searchText.isEmpty {
                     ContentUnavailableView.search(text: searchText)
                 } else {
-                    List(filteredRepositories) { repo in
-                        repositoryButton(repo)
+                    List {
+                        if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            allRepositoriesButton
+                        }
+                        ForEach(filteredRepositories) { repo in
+                            repositoryButton(repo)
+                        }
                     }
                     .listStyle(.plain)
                 }
@@ -40,6 +46,39 @@ struct RepositoryPickerView: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+    }
+
+    private var allRepositoriesButton: some View {
+        Button {
+            onSelectAll()
+            dismiss()
+        } label: {
+            HStack {
+                Image(systemName: "rectangle.grid.2x2")
+                    .foregroundStyle(.blue)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("All work")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text("Every repository with a board card")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 8)
+                if selectedRepository == nil {
+                    Image(systemName: "checkmark")
+                        .fontWeight(.semibold)
+                        .accessibilityHidden(true)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("All work")
+        .accessibilityValue(selectedRepository == nil ? "Selected" : "")
+        .accessibilityHint("Show cards from every repository")
+        .accessibilityIdentifier("repo-all-work")
     }
 
     private func repositoryButton(_ repo: Repo) -> some View {

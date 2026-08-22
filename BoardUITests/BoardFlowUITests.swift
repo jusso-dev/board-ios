@@ -10,11 +10,14 @@ final class BoardFlowUITests: XCTestCase {
         app.launch()
         linkServer()
 
-        XCTAssertTrue(element("kanban-board").waitForExistence(timeout: 8))
+        XCTAssertTrue(element("work-overview").waitForExistence(timeout: 8))
+        XCTAssertTrue(element("work-overview-summary").exists)
+        XCTAssertTrue(element("overview-card-other-org/operations-7").exists)
         XCTAssertTrue(element("server-summary").exists)
-        XCTAssertTrue(element("column-backlog").exists)
 
         searchAcrossOrganisations()
+        XCTAssertTrue(element("kanban-board").waitForExistence(timeout: 5))
+        XCTAssertTrue(element("column-backlog").exists)
         createCard()
         moveExistingCard()
         startAndCancelJob()
@@ -126,7 +129,8 @@ final class BoardFlowUITests: XCTestCase {
         app.launchArguments = ["-board-ui-testing"]
         app.launch()
 
-        XCTAssertTrue(element("kanban-board").waitForExistence(timeout: 8))
+        XCTAssertTrue(element("work-overview").waitForExistence(timeout: 8))
+        XCTAssertTrue(element("overview-card-other-org/operations-7").exists)
         XCTAssertFalse(app.textFields["server-url-field"].exists)
     }
 

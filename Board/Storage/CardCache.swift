@@ -6,9 +6,16 @@ struct CachedBoard: Codable, Equatable, Sendable {
     let savedAt: Date
 }
 
+struct CachedOverview: Codable, Equatable, Sendable {
+    let cards: [RepositoryCard]
+    let savedAt: Date
+}
+
 protocol CardCacheProtocol: Sendable {
     func load(repo: String) async throws -> CachedBoard?
     func save(repo: String, cards: [Card]) async throws
+    func loadOverview() async throws -> CachedOverview?
+    func saveOverview(cards: [RepositoryCard]) async throws
     func clear() async throws
 }
 
@@ -34,14 +41,35 @@ actor CardCache: CardCacheProtocol {
     }
 
     func save(repo: String, cards: [Card]) throws {
+        try prepareDirectory()
+        let entry = CachedBoard(repo: repo, cards: cards, savedAt: Date())
+        try write(entry, to: fileURL(for: repo))
+    }
+
+    func loadOverview() throws -> CachedOverview? {
+        let fileURL = directory.appending(path: "all-repositories.json")
+        guard fileManager.fileExists(atPath: fileURL.path) else { return nil }
+        let data = try Data(contentsOf: fileURL)
+        return try BoardJSON.decoder().decode(CachedOverview.self, from: data)
+    }
+
+    func saveOverview(cards: [RepositoryCard]) throws {
+        try prepareDirectory()
+        let entry = CachedOverview(cards: cards, savedAt: Date())
+        try write(entry, to: directory.appending(path: "all-repositories.json"))
+    }
+
+    private func prepareDirectory() throws {
         try fileManager.createDirectory(
             at: directory,
             withIntermediateDirectories: true,
             attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication]
         )
-        let entry = CachedBoard(repo: repo, cards: cards, savedAt: Date())
-        let data = try BoardJSON.encoder().encode(entry)
-        var destination = fileURL(for: repo)
+    }
+
+    private func write<Value: Encodable>(_ value: Value, to fileURL: URL) throws {
+        let data = try BoardJSON.encoder().encode(value)
+        var destination = fileURL
         try data.write(to: destination, options: .atomic)
         try fileManager.setAttributes(
             [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
@@ -65,6 +93,7 @@ actor CardCache: CardCacheProtocol {
 
 actor MemoryCardCache: CardCacheProtocol {
     private var entries: [String: CachedBoard] = [:]
+    private var overview: CachedOverview?
 
     func load(repo: String) -> CachedBoard? { entries[repo] }
 
@@ -72,5 +101,14 @@ actor MemoryCardCache: CardCacheProtocol {
         entries[repo] = CachedBoard(repo: repo, cards: cards, savedAt: Date())
     }
 
-    func clear() { entries.removeAll() }
+    func loadOverview() -> CachedOverview? { overview }
+
+    func saveOverview(cards: [RepositoryCard]) {
+        overview = CachedOverview(cards: cards, savedAt: Date())
+    }
+
+    func clear() {
+        entries.removeAll()
+        overview = nil
+    }
 }

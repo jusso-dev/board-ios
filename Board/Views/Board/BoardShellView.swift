@@ -6,12 +6,20 @@ struct BoardShellView: View {
     @State private var createColumn: BoardColumn?
     @State private var showsRepoPicker = false
     @State private var showsSettings = false
+    @State private var path = NavigationPath()
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             Group {
                 if model.repos.isEmpty {
                     emptyRepos
+                } else if model.selectedRepo == nil {
+                    WorkOverviewView { value in
+                        Task {
+                            await model.selectRepo(value.repo)
+                            path.append(value.card.number)
+                        }
+                    }
                 } else {
                     BoardView { column in
                         createColumn = column
@@ -34,7 +42,7 @@ struct BoardShellView: View {
                         Image(systemName: "arrow.clockwise")
                     }
                     .accessibilityLabel("Refresh board")
-                    .disabled(model.selectedRepo == nil || model.isLoadingBoard)
+                    .disabled(model.isLoadingBoard || model.isLoadingOverview)
 
                     Button {
                         createColumn = .backlog
@@ -71,9 +79,18 @@ struct BoardShellView: View {
         .sheet(isPresented: $showsRepoPicker) {
             RepositoryPickerView(
                 repositories: model.repos,
-                selectedRepository: model.selectedRepo
+                selectedRepository: model.selectedRepo,
+                onSelectAll: {
+                    Task {
+                        path = NavigationPath()
+                        await model.selectAllRepositories()
+                    }
+                }
             ) { repo in
-                Task { await model.selectRepo(repo.nameWithOwner) }
+                Task {
+                    path = NavigationPath()
+                    await model.selectRepo(repo.nameWithOwner)
+                }
             }
         }
         .sheet(isPresented: $showsSettings) {
@@ -82,7 +99,7 @@ struct BoardShellView: View {
     }
 
     private var navigationTitle: String {
-        model.repos.first(where: { $0.nameWithOwner == model.selectedRepo })?.shortName ?? "Board"
+        model.repos.first(where: { $0.nameWithOwner == model.selectedRepo })?.shortName ?? "All work"
     }
 
     private var repoPicker: some View {
@@ -98,7 +115,7 @@ struct BoardShellView: View {
             }
         }
         .accessibilityLabel("Choose repository")
-        .accessibilityValue(model.selectedRepo ?? "None")
+        .accessibilityValue(model.selectedRepo ?? "All repositories")
         .accessibilityIdentifier("repo-picker")
     }
 

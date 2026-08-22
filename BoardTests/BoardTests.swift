@@ -65,6 +65,39 @@ struct APIDecodingTests {
         #expect(page.perPage == 50)
     }
 
+    @Test("Overview keeps repository identity and completeness")
+    func decodesOverviewPage() throws {
+        let data = try #require(
+            """
+            {
+              "items": [{
+                "repo": "other-org/operations",
+                "card": {
+                  "number": 7,
+                  "title": "Repair the production deployment",
+                  "body": "Restore the service.",
+                  "column": "board:running",
+                  "labels": ["board:running", "agent:codex"],
+                  "url": "https://github.com/other-org/operations/issues/7",
+                  "createdAt": "2026-08-22T01:02:03Z",
+                  "updatedAt": "2026-08-22T02:03:04Z"
+                }
+              }],
+              "page": 1,
+              "perPage": 50,
+              "hasMore": false,
+              "partial": false
+            }
+            """.data(using: .utf8)
+        )
+
+        let page = try BoardJSON.decoder().decode(OverviewPage.self, from: data)
+        #expect(page.items.first?.repo == "other-org/operations")
+        #expect(page.items.first?.card.column == .running)
+        #expect(page.items.first?.id == "other-org/operations#7")
+        #expect(!page.partial)
+    }
+
     @Test("Job record decodes exact server status and prUrl")
     func decodesJobRecord() throws {
         let data = try #require(
@@ -198,13 +231,26 @@ struct CardCacheTests {
         #expect(loaded.cards == [card])
         #expect(loaded.repo == "jusso-dev/board-api")
     }
+
+    @Test("All-repository overview survives a disk round-trip")
+    func overviewDiskRoundTrip() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appending(path: "board-overview-cache-test-\(UUID().uuidString)", directoryHint: .isDirectory)
+        let cache = CardCache(rootURL: root)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let value = RepositoryCard(repo: "other-org/operations", card: try sampleCard(number: 7, column: .running))
+        try await cache.saveOverview(cards: [value])
+        let loaded = try #require(try await cache.loadOverview())
+        #expect(loaded.cards == [value])
+    }
 }
 
 @Suite("App model")
 @MainActor
 struct AppModelTests {
-    @Test("Pairing loads repositories and cards")
-    func pairingLoadsBoard() async throws {
+    @Test("Pairing opens the all-repository work overview")
+    func pairingLoadsOverview() async throws {
         let model = makeModel(api: MockBoardAPIClient())
         _ = try await model.link(
             baseURLString: "http://192.168.1.10:8787",
@@ -212,8 +258,25 @@ struct AppModelTests {
         )
         #expect(model.phase == .linked)
         #expect(model.server?.name == "board-mock")
-        #expect(model.selectedRepo == "jusso-dev/board-api")
-        #expect(model.cards.map(\.number).contains(42))
+        #expect(model.selectedRepo == nil)
+        #expect(model.overviewCards.contains { $0.repo == "jusso-dev/board-api" && $0.card.number == 42 })
+        #expect(model.overviewCards.contains { $0.repo == "other-org/operations" && $0.card.number == 7 })
+    }
+
+    @Test("Overview exposes active work from another organisation")
+    func overviewShowsCrossOrganisationJob() async throws {
+        let model = makeModel(api: MockBoardAPIClient())
+        _ = try await model.link(
+            baseURLString: "http://192.168.1.10:8787",
+            code: runtimePairCode()
+        )
+
+        let card = try #require(
+            model.overviewCards.first { $0.repo == "other-org/operations" && $0.card.number == 7 }
+        )
+        let job = try #require(model.latestJob(for: card))
+        #expect(job.status == .running)
+        #expect(job.harness == .codex)
     }
 
     @Test("Failed optimistic move rolls the card back")
@@ -223,6 +286,7 @@ struct AppModelTests {
             baseURLString: "http://192.168.1.10:8787",
             code: runtimePairCode()
         )
+        await model.selectRepo("jusso-dev/board-api")
         #expect(model.card(number: 42)?.column == .backlog)
         let moved = await model.moveCard(number: 42, to: .ready)
         #expect(!moved)
@@ -236,6 +300,7 @@ struct AppModelTests {
             baseURLString: "http://192.168.1.10:8787",
             code: runtimePairCode()
         )
+        await model.selectRepo("jusso-dev/board-api")
         let first = try #require(await model.startJob(issue: 42, harness: .codex, prompt: "", crew: []))
         let second = try #require(await model.startJob(issue: 43, harness: .cursor, prompt: "", crew: []))
         #expect(first.id == second.id)

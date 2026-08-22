@@ -12,6 +12,8 @@ The app talks only to Board API over LAN or Tailscale. It does not contain a Git
 
 - Links to one self-hosted Board API with a short-lived pair code.
 - Stores the returned `board_` token and server ID in Keychain.
+- Opens on an All work view that combines labelled cards across every repository the server can push to.
+- Groups running, pending, review, backlog, and done work so active projects are visible without guessing a repository.
 - Shows repositories visible to the GitHub account signed in on the server, including other organisations and direct collaborations.
 - Searches repository owner, name, and description locally as you type.
 - Displays open GitHub issues in `backlog`, `ready`, `running`, `review`, and `done`.
@@ -20,7 +22,7 @@ The app talks only to Board API over LAN or Tailscale. It does not contain a Git
 - Starts `grok`, `codex`, or `cursor` jobs on the server, including an ordered sequential crew.
 - Streams job logs and status with server-sent events and can cancel a running job.
 - Shows whether a pull request actually exists; a completed job without one is marked unverified.
-- Keeps the last successful card list on disk for offline reading.
+- Keeps both the all-repository overview and per-repository card lists on disk for offline reading.
 
 The phone never clones a repository or executes a coding CLI. It is a focused remote control for the homelab service.
 
@@ -130,14 +132,16 @@ After one client pairs, the server no longer prints a first-client code. Existin
 
 ## Repository selection and search
 
-The repository button opens a searchable sheet. Search is always visible and matches:
+Board opens with **All work** selected. This is the complete cross-repository queue returned by Board API 0.3.0 or newer. Every row shows its `owner/repository`, issue number, column, latest harness/job state, and a pull-request link when one was actually recorded. The summary at the top counts running, pending, review, and affected repositories. Cards are grouped in operational order: Running, Ready, Review, Backlog, then Done.
+
+The repository button is now a filter, not a required first choice. Choose **All work** to return to the overview, or choose one repository for its five-column kanban. The sheet search is always visible and matches:
 
 - `owner/repository`;
 - repository name;
 - organisation or owner name;
 - repository description.
 
-Filtering happens against the fetched list, so typing does not make one network request per character. Private repositories have a lock indicator, and the selected repository has a checkmark.
+Filtering happens against the fetched list, so typing does not make one network request per character. The All work list has its own local search across repository, issue number, title, body, and labels. Private repositories have a lock indicator, and the selected filter has a checkmark.
 
 The server obtains this list from the GitHub account authenticated as Linux user `board`. It includes repositories available through ownership, direct collaboration, and organisation membership. If an organisation is missing, fix the GitHub identity, token scopes, or organisation authorisation on the server. The app cannot expand server-side GitHub permissions.
 
@@ -153,7 +157,9 @@ GitHub issues are the only cards. Board API maps these labels to the five column
 | Review | `board:review` |
 | Done | `board:done` |
 
-The app loads cards when a linked session starts, when the selected repository changes, and when you use Refresh. There is no timer-based background polling. The server performs a fresh GitHub issue read for each card request, so an issue created by Grokbot or another GitHub client appears on the next refresh when it is open and has one `board:*` column label.
+The app calls `GET /v1/overview` immediately after linking or launching with saved credentials. The API searches all pushable repositories available to its GitHub identity, globally sorts labelled open issues by update time, and paginates the result. This means running and pending work from personal repositories, other organisations, and direct collaborations is visible before you select a project. If one GitHub owner cannot be searched, the API marks the response partial and the app shows a warning instead of implying the list is complete.
+
+The app reloads the overview when linked and when you use Refresh. It loads a single repository when that filter is selected. There is no timer-based polling in the iOS app. The server performs a fresh GitHub issue search for overview/card reads, so an issue created by Grokbot or another GitHub client appears on the next refresh when it is open and has one `board:*` column label.
 
 Creating a card calls `POST /v1/cards`. Moving a card calls `PATCH /v1/cards/{number}` and updates the interface optimistically. If the request fails, the card rolls back to its previous column and an error is shown.
 
@@ -199,6 +205,7 @@ There is no broad `NSAllowsArbitraryLoads` exception. A failed connection is rep
 | Health and pairing | `GET /v1/health`, `POST /v1/pair` |
 | Server details | `GET /v1/server` |
 | Repository picker | `GET /v1/repos` |
+| All-repository work | `GET /v1/overview` |
 | Cards | `GET /v1/cards`, `POST /v1/cards`, `GET /v1/cards/{number}`, `PATCH /v1/cards/{number}` |
 | Jobs | `GET /v1/jobs`, `POST /v1/jobs`, `GET /v1/jobs/{id}`, `POST /v1/jobs/{id}/cancel` |
 | Job events | `GET /v1/jobs/{id}/events` |
@@ -208,7 +215,7 @@ Authenticated requests send `Authorization: Bearer board_...`. JSON keys remain 
 ### Contract gaps handled explicitly
 
 - The API does not return issue comments, so card details state that comments are unavailable.
-- Cards do not embed active jobs or pull requests. The app joins cards to `GET /v1/jobs` by repository and issue number.
+- Overview cards do not embed active jobs or pull requests. The app joins them to `GET /v1/jobs` by repository and issue number.
 - Current API statuses are `queued`, `running`, `cancelling`, `cancelled`, `succeeded`, and `failed`.
 - A successful 0.2.0 server job supplies `prUrl`. A `succeeded` record without it is shown as unverified. The client does not invent `pr_open` or `done` status values.
 - `/v1/keys` exists in the server contract but is not used by the app. Minting additional keys remains an authenticated server operation.
@@ -234,7 +241,7 @@ No UIKit is used unless a platform integration requires it. There is no CloudKit
 
 - `board_` token and server ID: Keychain generic-password item, accessible only while the device is unlocked and not migrated to another device.
 - Base URL and first-launch marker: app preferences because neither is a secret.
-- Last successful cards: protected JSON in the app cache directory, excluded from backup.
+- Last successful overview and per-repository cards: protected JSON in the app cache directory, excluded from backup.
 - Logs: never include the board token, pair code, GitHub credentials, or vendor credentials.
 
 Cached cards remain readable offline. Creating, moving, running, and cancelling always require the server.
@@ -245,6 +252,7 @@ Cached cards remain readable offline. Creating, moving, running, and cancelling 
 
 - base URL and ATS policy;
 - OpenAPI model decoding;
+- all-repository decoding, caching, and cross-organisation active-job matching;
 - explicit detection of a completed job with no pull request;
 - cross-organisation repository search;
 - server-sent event decoding;
@@ -252,14 +260,14 @@ Cached cards remain readable offline. Creating, moving, running, and cancelling 
 - protected disk cache persistence;
 - optimistic move rollback;
 - one-job-per-repository conflict handling;
-- a Simulator flow that pairs, searches another organisation, switches repositories, creates and moves a card, starts a Codex job, receives an event, cancels, and relaunches with its Keychain credential.
+- a Simulator flow that pairs into All work, proves another organisation's running card is visible, filters repositories, creates and moves a card, starts a Codex job, receives an event, cancels, and relaunches into All work with its Keychain credential.
 
 ## Troubleshooting
 
 - **Health fails:** confirm the phone can reach the guest, use `http` with `:8787` for the direct listener, and test the same URL in Safari or with `curl` from another Tailscale device.
 - **Pairing fails:** use the current unexpired code, preserve all eight characters, and confirm no client already consumed it.
 - **Repository missing:** run `gh auth status` as user `board` on the guest and check organisation SSO or token scope.
-- **Cards missing:** refresh, then confirm each open issue has exactly one supported `board:*` label.
+- **Cards missing from All work:** refresh, check for a partial-overview warning, then confirm the open issue has a supported `board:*` label and the server's GitHub identity can push to that repository.
 - **Ready card did not start:** confirm server automation is enabled, use at most one of `agent:grok`, `agent:codex`, or `agent:cursor`, and inspect `journalctl -u board-api`.
 - **Harness missing:** install and sign in to that CLI as user `board`; the iOS app cannot hold or repair vendor credentials.
 - **Job returns 409:** open the existing job for that repository or cancel it before starting another.

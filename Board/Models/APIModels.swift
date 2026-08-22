@@ -161,6 +161,21 @@ struct CardPage: Codable, Equatable, Sendable {
     let hasMore: Bool
 }
 
+struct RepositoryCard: Codable, Identifiable, Equatable, Hashable, Sendable {
+    let repo: String
+    var card: Card
+
+    var id: String { "\(repo)#\(card.number)" }
+}
+
+struct OverviewPage: Codable, Equatable, Sendable {
+    let items: [RepositoryCard]
+    let page: Int
+    let perPage: Int
+    let hasMore: Bool
+    let partial: Bool
+}
+
 struct CreateCardRequest: Codable, Equatable, Sendable {
     let repo: String
     let title: String
