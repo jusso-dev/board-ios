@@ -159,7 +159,9 @@ GitHub issues are the only cards. Board API maps these labels to the five column
 
 The app calls `GET /v1/overview` immediately after linking or launching with saved credentials. The API searches all pushable repositories available to its GitHub identity, globally sorts labelled open issues by update time, and paginates one shared 60-second snapshot. This means running and pending work from personal repositories, other organisations, and direct collaborations is visible before you select a project. If one GitHub owner cannot be refreshed, the API lists it in `unavailableOwners`, retains its older cached cards when possible, and the app shows one compact inline warning. Cards from successful owners still load; no alert blocks the board.
 
-The app reloads the overview when linked and when you use Refresh. It loads a single repository when that filter is selected. There is no timer-based polling in the iOS app. Overview pagination, concurrent app requests, and automatic Ready pickup share one server snapshot, preventing GitHub's search quota from being spent once per owner for every request. An issue created by Grokbot or another GitHub client appears after the next snapshot refresh when it is open and has one `board:*` column label.
+Board refreshes the visible card list and jobs whenever iOS returns it to the active foreground. A cancelled background request is discarded, not reported as an outage. Read-only requests retry once after a short delay when a timeout, dropped connection, temporary DNS failure, rate limit, or retryable server response occurs. If card refresh still fails, the app checks `/v1/health`: only a failed health check produces the orange Offline state and disables mutations. A healthy server with delayed GitHub data keeps mutations available and shows a non-blocking saved-data warning. Repository-list failures never hide or block All work.
+
+The app reloads the visible view when linked, foregrounded, or when you use Refresh. It loads a single repository when that filter is selected. There is no timer-based polling in the iOS app. Overview pagination, concurrent app requests, and automatic Ready pickup share one server snapshot, preventing GitHub's search quota from being spent once per owner for every request. An issue created by Grokbot or another GitHub client appears after the next snapshot refresh when it is open and has one `board:*` column label.
 
 Creating a card calls `POST /v1/cards`. Moving a card calls `PATCH /v1/cards/{number}` and updates the interface optimistically. If the request fails, the card rolls back to its previous column and an error is shown.
 
@@ -258,15 +260,20 @@ Cached cards remain readable offline. Creating, moving, running, and cancelling 
 - server-sent event decoding;
 - Keychain persistence;
 - protected disk cache persistence;
+- foreground refresh after remote card changes;
+- one bounded retry for transient reads;
+- separate healthy-server and offline cache states;
 - optimistic move rollback;
 - one-job-per-repository conflict handling;
-- a Simulator flow that pairs into All work, proves another organisation's running card is visible, filters repositories, creates and moves a card, starts a Codex job, receives an event, cancels, and relaunches into All work with its Keychain credential.
+- Simulator flows that pair into All work, foreground the app to prove a newly added card appears without force quit, prove another organisation's running card is visible, filter repositories, create and move a card, start a Codex job, receive an event, cancel, and relaunch into All work with its Keychain credential.
 
 ## Troubleshooting
 
 - **Health fails:** confirm the phone can reach the guest, use `http` with `:8787` for the direct listener, and test the same URL in Safari or with `curl` from another Tailscale device.
 - **Pairing fails:** use the current unexpired code, preserve all eight characters, and confirm no client already consumed it.
 - **Repository missing:** run `gh auth status` as user `board` on the guest and check organisation SSO or token scope.
+- **Cards update only after force quit:** install the current build. Board now refreshes on every foreground activation; older builds only refreshed during initial bootstrap or manual pull-to-refresh.
+- **Offline while health works:** install the current build. Offline now requires `/v1/health` to fail; a GitHub data error appears as a non-blocking update warning instead.
 - **Refresh warning:** cards remain usable. Named GitHub owners could not be refreshed, normally because GitHub Search is temporarily limited; the server retains their last snapshot and retries after the 60-second cache window.
 - **Cards missing from All work:** wait 60 seconds and refresh, then confirm the open issue has a supported `board:*` label and the server's GitHub identity can push to that repository.
 - **Ready card did not start:** confirm server automation is enabled, the original GitHub issue author is allowed by `allowedIssueAuthors`, use at most one of `agent:grok`, `agent:codex`, or `agent:cursor`, and inspect `journalctl -u board-api`.

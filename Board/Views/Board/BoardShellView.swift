@@ -11,15 +11,15 @@ struct BoardShellView: View {
     var body: some View {
         NavigationStack(path: $path) {
             Group {
-                if model.repos.isEmpty {
-                    emptyRepos
-                } else if model.selectedRepo == nil {
+                if model.selectedRepo == nil {
                     WorkOverviewView { value in
                         Task {
                             await model.selectRepo(value.repo)
                             path.append(value.card.number)
                         }
                     }
+                } else if model.repos.isEmpty {
+                    emptyRepos
                 } else {
                     BoardView { column in
                         createColumn = column
@@ -66,6 +66,9 @@ struct BoardShellView: View {
                 VStack(spacing: 0) {
                     if model.isOffline {
                         offlineBanner
+                    }
+                    if let warning = model.refreshWarning {
+                        refreshWarningBanner(warning)
                     }
                     if let server = model.server {
                         ServerConnectionBar(server: server)
@@ -141,6 +144,16 @@ struct BoardShellView: View {
             .padding(.vertical, 8)
             .background(Color.orange.opacity(0.17))
             .accessibilityIdentifier("offline-banner")
+    }
+
+    private func refreshWarningBanner(_ warning: String) -> some View {
+        Label(warning, systemImage: "arrow.triangle.2.circlepath")
+            .font(.footnote.weight(.medium))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(Color.yellow.opacity(0.16))
+            .accessibilityIdentifier("refresh-warning")
     }
 }
 private struct ServerConnectionBar: View {

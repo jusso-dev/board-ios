@@ -5,20 +5,25 @@ actor MockBoardAPIClient: BoardAPIClientProtocol {
     private let failMoves: Bool
     private let overviewUnavailableOwners: [String]
     private let delaysOverview: Bool
+    private let revealsCardOnSecondOverview: Bool
     private var cardsByRepo: [String: [Card]]
     private var overviewRequestCount = 0
+    private var remainingOverviewFailures = 0
+    private var healthFails = false
     private var jobValues: [JobRecord] = []
     private var eventValues: [UUID: [JobEvent]] = [:]
 
     init(
         failMoves: Bool = false,
         overviewUnavailableOwners: [String] = [],
-        delaysOverview: Bool = false
+        delaysOverview: Bool = false,
+        revealsCardOnSecondOverview: Bool = false
     ) {
         self.serverID = Self.uuid("9a7cb1f6-37f4-4d9b-8a40-d7ab8f53a19c")
         self.failMoves = failMoves
         self.overviewUnavailableOwners = overviewUnavailableOwners
         self.delaysOverview = delaysOverview
+        self.revealsCardOnSecondOverview = revealsCardOnSecondOverview
         let now = Date()
         self.cardsByRepo = [
             "jusso-dev/board-api": [
@@ -79,8 +84,11 @@ actor MockBoardAPIClient: BoardAPIClientProtocol {
         ]
     }
 
-    func health(baseURL: URL) -> HealthResponse {
-        HealthResponse(ok: true, version: "0.1.0-mock")
+    func health(baseURL: URL) throws -> HealthResponse {
+        if healthFails {
+            throw BoardAPIError.transport(code: .cannotConnectToHost)
+        }
+        return HealthResponse(ok: true, version: "0.1.0-mock")
     }
 
     func pair(baseURL: URL, code: String) throws -> PairResponse {
@@ -153,10 +161,35 @@ actor MockBoardAPIClient: BoardAPIClientProtocol {
         )
     }
 
-    func overview(baseURL: URL, page: Int, perPage: Int) async -> OverviewPage {
+    func overview(baseURL: URL, page: Int, perPage: Int) async throws -> OverviewPage {
         overviewRequestCount += 1
+        if remainingOverviewFailures > 0 {
+            remainingOverviewFailures -= 1
+            throw BoardAPIError.server(
+                statusCode: 503,
+                code: "mock_overview_unavailable",
+                message: "The mock overview is temporarily unavailable."
+            )
+        }
         if delaysOverview {
             try? await Task.sleep(for: .milliseconds(100))
+        }
+        if revealsCardOnSecondOverview,
+           overviewRequestCount >= 2,
+           !cardsByRepo["jusso-dev/board-api", default: []].contains(where: { $0.number == 99 }) {
+            let now = Date()
+            cardsByRepo["jusso-dev/board-api", default: []].append(
+                Card(
+                    number: 99,
+                    title: "Added while Board was in the background",
+                    body: "Foreground activation should fetch this card without a force quit.",
+                    column: .ready,
+                    labels: [BoardColumn.ready.rawValue],
+                    url: Self.url("https://github.com/jusso-dev/board-api/issues/99"),
+                    createdAt: now,
+                    updatedAt: now
+                )
+            )
         }
         let values = cardsByRepo
             .flatMap { repo, cards in cards.map { RepositoryCard(repo: repo, card: $0) } }
@@ -191,6 +224,18 @@ actor MockBoardAPIClient: BoardAPIClientProtocol {
 
     func overviewRequests() -> Int {
         overviewRequestCount
+    }
+
+    func failNextOverviewRequests(_ count: Int) {
+        remainingOverviewFailures = max(count, 0)
+    }
+
+    func setHealthFailure(_ value: Bool) {
+        healthFails = value
+    }
+
+    func insertCard(_ card: Card, repo: String) {
+        cardsByRepo[repo, default: []].append(card)
     }
 
     func createCard(baseURL: URL, request: CreateCardRequest) -> Card {

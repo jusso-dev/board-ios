@@ -29,6 +29,7 @@ final class AppModel {
     private(set) var isOverviewPartial = false
     private(set) var overviewUnavailableOwners: [String] = []
     private(set) var isOffline = false
+    private(set) var refreshWarning: String?
     private(set) var currentBaseURL: URL?
     var notice: Notice?
 
@@ -65,11 +66,13 @@ final class AppModel {
             }
             let url = try ServerURLValidator.validatedURL(from: baseURLString)
             currentBaseURL = url
-            server = try await api.server(baseURL: url)
+            server = try await read { try await api.server(baseURL: url) }
             phase = .linked
             await loadLinkedData()
         } catch {
-            if isAuthenticationError(error) {
+            if isCancellation(error) {
+                return
+            } else if isAuthenticationError(error) {
                 await forgetLink(clearCache: false)
             } else {
                 phase = .needsLink
@@ -80,7 +83,7 @@ final class AppModel {
 
     func testConnection(baseURLString: String) async throws -> HealthResponse {
         let url = try ServerURLValidator.validatedURL(from: baseURLString)
-        let health = try await api.health(baseURL: url)
+        let health = try await read { try await api.health(baseURL: url) }
         guard health.ok else {
             throw BoardAPIError.server(statusCode: 503, code: "unhealthy", message: "The server reported that it is not healthy.")
         }
@@ -90,14 +93,14 @@ final class AppModel {
     @discardableResult
     func link(baseURLString: String, code: String) async throws -> URL {
         let url = try ServerURLValidator.validatedURL(from: baseURLString)
-        _ = try await api.health(baseURL: url)
+        _ = try await read { try await api.health(baseURL: url) }
         let response = try await api.pair(baseURL: url, code: code)
         try await credentials.save(StoredCredentials(token: response.token, serverID: response.serverID))
 
         currentBaseURL = url
         phase = .linked
         do {
-            server = try await api.server(baseURL: url)
+            server = try await read { try await api.server(baseURL: url) }
         } catch {
             if isAuthenticationError(error) {
                 await forgetLink(clearCache: false)
@@ -111,26 +114,21 @@ final class AppModel {
 
     func loadLinkedData() async {
         guard phase == .linked, currentBaseURL != nil else { return }
-        await refreshServer()
-        await refreshJobs(showError: false)
-        await loadRepos()
+        await refreshServer(showError: false)
+        await reloadBoard()
+        await refreshRepositories(showError: false)
     }
 
     func loadRepos() async {
-        guard let baseURL = currentBaseURL else { return }
-        do {
-            let values = try await api.repos(baseURL: baseURL)
-            repos = values.sorted { $0.nameWithOwner.localizedCaseInsensitiveCompare($1.nameWithOwner) == .orderedAscending }
-            if let selectedRepo, repos.contains(where: { $0.nameWithOwner == selectedRepo }) {
-                await loadBoard(repo: selectedRepo)
-            } else {
-                selectedRepo = nil
-                cards = []
-                await loadOverview()
-            }
-        } catch {
-            handle(error, title: "Repositories unavailable")
+        let refreshed = await refreshRepositories(showError: true)
+        guard phase == .linked else { return }
+        if refreshed,
+           let selectedRepo,
+           !repos.contains(where: { $0.nameWithOwner == selectedRepo }) {
+            self.selectedRepo = nil
+            cards = []
         }
+        await reloadBoard()
     }
 
     func selectRepo(_ repo: String) async {
@@ -155,6 +153,13 @@ final class AppModel {
         }
     }
 
+    func refreshWhenActive() async {
+        guard phase == .linked, currentBaseURL != nil else { return }
+        await reloadBoard()
+        guard phase == .linked, !Task.isCancelled else { return }
+        await refreshRepositories(showError: false)
+    }
+
     func loadOverview() async {
         guard let baseURL = currentBaseURL, !isLoadingOverview else { return }
         isLoadingOverview = true
@@ -167,7 +172,9 @@ final class AppModel {
             var partial = false
             var unavailableOwners = Set<String>()
             repeat {
-                let response = try await api.overview(baseURL: baseURL, page: page, perPage: 50)
+                let response = try await read {
+                    try await api.overview(baseURL: baseURL, page: page, perPage: 50)
+                }
                 values.append(contentsOf: response.items)
                 hasMore = response.hasMore
                 partial = partial || response.partial
@@ -182,22 +189,32 @@ final class AppModel {
                 $0.localizedCaseInsensitiveCompare($1) == .orderedAscending
             }
             isOffline = false
+            refreshWarning = nil
             try? await cache.saveOverview(cards: overviewCards)
         } catch {
+            if isCancellation(error) {
+                return
+            }
             if isAuthenticationError(error) {
                 await forgetLink(clearCache: false)
                 return
             }
+            let serverIsOnline = await serverIsReachable(baseURL: baseURL)
             if let cached = try? await cache.loadOverview(), selectedRepo == nil {
                 overviewCards = cached.cards
                 isOverviewPartial = false
                 overviewUnavailableOwners = []
+                isOffline = !serverIsOnline
+                refreshWarning = serverIsOnline
+                    ? "Update delayed. Server is online; showing the last saved cards."
+                    : nil
+            } else if !serverIsOnline {
                 isOffline = true
-                notice = Notice(
-                    title: "Offline",
-                    message: "Showing all-repository work saved on this phone. Changes need the server."
-                )
+                refreshWarning = nil
+                notice = Notice(title: "Offline", message: "No saved cards are available yet. Try again when the server is reachable.")
             } else {
+                isOffline = false
+                refreshWarning = nil
                 handle(error, title: "Work overview unavailable")
             }
         }
@@ -213,13 +230,15 @@ final class AppModel {
             var page = 1
             var hasMore: Bool
             repeat {
-                let response = try await api.cards(
-                    baseURL: baseURL,
-                    repo: repo,
-                    column: nil,
-                    page: page,
-                    perPage: 50
-                )
+                let response = try await read {
+                    try await api.cards(
+                        baseURL: baseURL,
+                        repo: repo,
+                        column: nil,
+                        page: page,
+                        perPage: 50
+                    )
+                }
                 values.append(contentsOf: response.items)
                 hasMore = response.hasMore
                 page += 1
@@ -228,17 +247,30 @@ final class AppModel {
             guard selectedRepo == repo else { return }
             cards = values.sorted { $0.updatedAt > $1.updatedAt }
             isOffline = false
+            refreshWarning = nil
             try? await cache.save(repo: repo, cards: cards)
         } catch {
+            if isCancellation(error) {
+                return
+            }
             if isAuthenticationError(error) {
                 await forgetLink(clearCache: false)
                 return
             }
+            let serverIsOnline = await serverIsReachable(baseURL: baseURL)
             if let cached = try? await cache.load(repo: repo), selectedRepo == repo {
                 cards = cached.cards
+                isOffline = !serverIsOnline
+                refreshWarning = serverIsOnline
+                    ? "Update delayed. Server is online; showing the last saved cards."
+                    : nil
+            } else if !serverIsOnline {
                 isOffline = true
-                notice = Notice(title: "Offline", message: "Showing cards saved on this phone. Changes need the server.")
+                refreshWarning = nil
+                notice = Notice(title: "Offline", message: "No saved cards are available yet. Try again when the server is reachable.")
             } else {
+                isOffline = false
+                refreshWarning = nil
                 handle(error, title: "Cards unavailable")
             }
         }
@@ -247,7 +279,7 @@ final class AppModel {
     func refreshJobs(showError: Bool = true) async {
         guard let baseURL = currentBaseURL else { return }
         do {
-            jobs = try await api.jobs(baseURL: baseURL)
+            jobs = try await read { try await api.jobs(baseURL: baseURL) }
         } catch {
             if isAuthenticationError(error) {
                 await forgetLink(clearCache: false)
@@ -257,12 +289,16 @@ final class AppModel {
         }
     }
 
-    func refreshServer() async {
+    func refreshServer(showError: Bool = true) async {
         guard let baseURL = currentBaseURL else { return }
         do {
-            server = try await api.server(baseURL: baseURL)
+            server = try await read { try await api.server(baseURL: baseURL) }
         } catch {
-            handle(error, title: "Server details unavailable")
+            if isAuthenticationError(error) {
+                await forgetLink(clearCache: false)
+            } else if showError {
+                handle(error, title: "Server details unavailable")
+            }
         }
     }
 
@@ -273,7 +309,9 @@ final class AppModel {
     func loadCard(number: Int) async {
         guard let baseURL = currentBaseURL, let selectedRepo else { return }
         do {
-            let value = try await api.card(baseURL: baseURL, repo: selectedRepo, number: number)
+            let value = try await read {
+                try await api.card(baseURL: baseURL, repo: selectedRepo, number: number)
+            }
             upsert(value)
             upsertOverview(value, repo: selectedRepo)
         } catch {
@@ -462,8 +500,8 @@ final class AppModel {
 
     func changeServerURL(_ input: String) async throws -> URL {
         let url = try ServerURLValidator.validatedURL(from: input)
-        _ = try await api.health(baseURL: url)
-        let details = try await api.server(baseURL: url)
+        _ = try await read { try await api.health(baseURL: url) }
+        let details = try await read { try await api.server(baseURL: url) }
         if let stored = try await credentials.load(), stored.serverID != details.serverID {
             throw BoardAPIError.server(
                 statusCode: 409,
@@ -474,6 +512,7 @@ final class AppModel {
         currentBaseURL = url
         server = details
         isOffline = false
+        refreshWarning = nil
         await loadLinkedData()
         return url
     }
@@ -489,7 +528,7 @@ final class AppModel {
     private func refreshJob(id: UUID) async {
         guard let baseURL = currentBaseURL else { return }
         do {
-            let value = try await api.job(baseURL: baseURL, id: id)
+            let value = try await read { try await api.job(baseURL: baseURL, id: id) }
             upsert(value)
         } catch {
             if !Task.isCancelled {
@@ -544,12 +583,16 @@ final class AppModel {
         eventsByJob = [:]
         currentBaseURL = nil
         isOffline = false
+        refreshWarning = nil
         isOverviewPartial = false
         overviewUnavailableOwners = []
         phase = .needsLink
     }
 
     private func handle(_ error: any Error, title: String) {
+        if isCancellation(error) {
+            return
+        }
         if isAuthenticationError(error) {
             Task { await forgetLink(clearCache: false) }
         } else {
@@ -563,6 +606,71 @@ final class AppModel {
             if case .missingCredentials = apiError { return true }
             return false
         }()
+    }
+
+    private func isCancellation(_ error: any Error) -> Bool {
+        if error is CancellationError { return true }
+        guard let apiError = error as? BoardAPIError else { return false }
+        if case .transport(code: .cancelled) = apiError { return true }
+        return false
+    }
+
+    private func isRetryableReadError(_ error: any Error) -> Bool {
+        guard !isCancellation(error), let apiError = error as? BoardAPIError else { return false }
+        switch apiError {
+        case .transport(let code):
+            return [
+                .timedOut,
+                .cannotConnectToHost,
+                .cannotFindHost,
+                .dnsLookupFailed,
+                .networkConnectionLost,
+                .notConnectedToInternet
+            ].contains(code)
+        case .server(let statusCode, _, _):
+            return [408, 429, 500, 502, 503, 504].contains(statusCode)
+        default:
+            return false
+        }
+    }
+
+    private func read<Value>(_ operation: () async throws -> Value) async throws -> Value {
+        do {
+            return try await operation()
+        } catch {
+            guard isRetryableReadError(error) else { throw error }
+            try Task.checkCancellation()
+            try await Task.sleep(for: .milliseconds(400))
+            try Task.checkCancellation()
+            return try await operation()
+        }
+    }
+
+    private func serverIsReachable(baseURL: URL) async -> Bool {
+        do {
+            return try await read { try await api.health(baseURL: baseURL) }.ok
+        } catch {
+            return false
+        }
+    }
+
+    @discardableResult
+    private func refreshRepositories(showError: Bool) async -> Bool {
+        guard let baseURL = currentBaseURL else { return false }
+        do {
+            let values = try await read { try await api.repos(baseURL: baseURL) }
+            repos = values.sorted {
+                $0.nameWithOwner.localizedCaseInsensitiveCompare($1.nameWithOwner) == .orderedAscending
+            }
+            return true
+        } catch {
+            if isAuthenticationError(error) {
+                await forgetLink(clearCache: false)
+            } else if showError {
+                handle(error, title: "Repositories unavailable")
+            }
+            return false
+        }
     }
 
     private func message(for error: any Error) -> String {

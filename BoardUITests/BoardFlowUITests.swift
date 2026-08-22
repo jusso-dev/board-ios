@@ -24,6 +24,21 @@ final class BoardFlowUITests: XCTestCase {
         proveKeychainPersistence()
     }
 
+    func testForegroundActivationRefreshesAllWork() throws {
+        app.launchArguments = ["-board-ui-testing", "-reset-state", "-reveal-card-on-foreground"]
+        app.launch()
+        linkServer()
+
+        XCTAssertTrue(element("work-overview").waitForExistence(timeout: 8))
+        let foregroundCard = element("overview-card-jusso-dev/board-api-99")
+        XCTAssertFalse(foregroundCard.exists)
+
+        XCUIDevice.shared.press(.home)
+        app.activate()
+
+        XCTAssertTrue(foregroundCard.waitForExistence(timeout: 8))
+    }
+
     private func searchAcrossOrganisations() {
         let picker = app.buttons["repo-picker"]
         picker.tap()

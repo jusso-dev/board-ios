@@ -314,6 +314,75 @@ struct AppModelTests {
         #expect(await api.overviewRequests() == 1)
     }
 
+    @Test("Foreground refresh picks up cards added while the app was away")
+    func foregroundRefreshLoadsNewCards() async throws {
+        let api = MockBoardAPIClient()
+        let model = makeModel(api: api)
+        _ = try await model.link(
+            baseURLString: "http://192.168.1.10:8787",
+            code: runtimePairCode()
+        )
+
+        let newCard = try sampleCard(number: 99, column: .ready)
+        await api.insertCard(newCard, repo: "jusso-dev/board-api")
+        await model.refreshWhenActive()
+
+        #expect(model.overviewCards.contains { $0.repo == "jusso-dev/board-api" && $0.card.number == 99 })
+    }
+
+    @Test("Transient overview failure is retried once")
+    func transientOverviewFailureRetries() async throws {
+        let api = MockBoardAPIClient()
+        let model = makeModel(api: api)
+        _ = try await model.link(
+            baseURLString: "http://192.168.1.10:8787",
+            code: runtimePairCode()
+        )
+        await api.resetOverviewRequestCount()
+        await api.failNextOverviewRequests(1)
+
+        await model.loadOverview()
+
+        #expect(await api.overviewRequests() == 2)
+        #expect(!model.isOffline)
+        #expect(model.refreshWarning == nil)
+    }
+
+    @Test("Healthy server is not labelled offline when GitHub data is delayed")
+    func healthyServerDoesNotBecomeOffline() async throws {
+        let api = MockBoardAPIClient()
+        let model = makeModel(api: api)
+        _ = try await model.link(
+            baseURLString: "http://192.168.1.10:8787",
+            code: runtimePairCode()
+        )
+        await api.failNextOverviewRequests(2)
+
+        await model.loadOverview()
+
+        #expect(!model.isOffline)
+        #expect(model.refreshWarning?.contains("Server is online") == true)
+        #expect(!model.overviewCards.isEmpty)
+    }
+
+    @Test("Failed health check marks cached cards offline")
+    func failedHealthCheckUsesOfflineCache() async throws {
+        let api = MockBoardAPIClient()
+        let model = makeModel(api: api)
+        _ = try await model.link(
+            baseURLString: "http://192.168.1.10:8787",
+            code: runtimePairCode()
+        )
+        await api.failNextOverviewRequests(2)
+        await api.setHealthFailure(true)
+
+        await model.loadOverview()
+
+        #expect(model.isOffline)
+        #expect(model.refreshWarning == nil)
+        #expect(!model.overviewCards.isEmpty)
+    }
+
     @Test("Failed optimistic move rolls the card back")
     func failedMoveRollsBack() async throws {
         let model = makeModel(api: MockBoardAPIClient(failMoves: true))
@@ -342,7 +411,7 @@ struct AppModelTests {
         #expect(model.notice?.title == "Repository busy")
     }
 
-    private func makeModel(api: MockBoardAPIClient) -> AppModel {
+    private func makeModel(api: any BoardAPIClientProtocol) -> AppModel {
         AppModel(api: api, credentials: MemoryCredentialStore(), cache: MemoryCardCache())
     }
 

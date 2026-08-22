@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct BoardApp: App {
+    @Environment(\.scenePhase) private var scenePhase
     @State private var model: AppModel
     @State private var hasBootstrapped = false
     @AppStorage("board.baseURL") private var baseURLString = ""
@@ -15,7 +16,9 @@ struct BoardApp: App {
         let cache = CardCache()
         let api: any BoardAPIClientProtocol
         if arguments.contains("-board-ui-testing") {
-            api = MockBoardAPIClient()
+            api = MockBoardAPIClient(
+                revealsCardOnSecondOverview: arguments.contains("-reveal-card-on-foreground")
+            )
         } else {
             api = BoardAPIClient(credentials: credentials)
         }
@@ -28,16 +31,21 @@ struct BoardApp: App {
             RootView(baseURLString: $baseURLString)
                 .environment(model)
                 .tint(.accentColor)
-                .task {
-                    guard !hasBootstrapped else { return }
-                    hasBootstrapped = true
-                    if resetForUITesting {
-                        baseURLString = ""
+                .task(id: scenePhase) {
+                    guard scenePhase == .active else { return }
+                    if hasBootstrapped {
+                        await model.refreshWhenActive()
+                    } else {
+                        if resetForUITesting {
+                            baseURLString = ""
+                        }
+                        await model.bootstrap(
+                            baseURLString: baseURLString,
+                            resetForUITesting: resetForUITesting
+                        )
+                        guard !Task.isCancelled else { return }
+                        hasBootstrapped = true
                     }
-                    await model.bootstrap(
-                        baseURLString: baseURLString,
-                        resetForUITesting: resetForUITesting
-                    )
                 }
         }
     }
