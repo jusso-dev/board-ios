@@ -264,6 +264,7 @@ Cached cards remain readable offline. Creating, moving, running, and cancelling 
 - **Harness missing:** install and sign in to that CLI as user `board`; the iOS app cannot hold or repair vendor credentials.
 - **Job returns 409:** open the existing job for that repository or cancel it before starting another.
 - **Job says completed but has no PR:** treat it as unverified. Board API 0.2.0 prevents new zero-change runs from succeeding; update the server and retry the issue from Ready.
+- **Noisy Simulator console:** PointerUI, keyboard prediction, RunningBoard entitlement, and `TUIPredictionViewCell` constraint messages come from Simulator system frameworks. A warning that names Board's `ForEach<Array<JobEvent>>` or says an `onChange` action updated repeatedly is app-owned; current builds give every SSE chunk a private UUID and coalesce auto-scroll through one bottom anchor, so update and rebuild if those warnings appear.
 
 ## License
 

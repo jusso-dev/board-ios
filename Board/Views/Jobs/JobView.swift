@@ -120,24 +120,29 @@ struct JobView: View {
                                     .textSelection(.enabled)
                             }
                             .font(.caption.monospaced())
-                            .id(event.id)
                             .accessibilityElement(children: .combine)
                         }
                     }
+
+                    Color.clear
+                        .frame(height: 1)
+                        .id(logBottomID)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(16)
             }
             .background(Color(.systemBackground))
-            .onChange(of: model.eventsByJob[jobID, default: []].count) { _, _ in
-                if let last = model.eventsByJob[jobID]?.last {
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        proxy.scrollTo(last.id, anchor: .bottom)
-                    }
-                }
+            .task(id: model.eventsByJob[jobID, default: []].count) {
+                guard !model.eventsByJob[jobID, default: []].isEmpty else { return }
+                await Task.yield()
+                proxy.scrollTo(logBottomID, anchor: .bottom)
             }
             .accessibilityLabel("Job log")
             .accessibilityIdentifier("job-log")
         }
+    }
+
+    private var logBottomID: String {
+        "job-log-bottom-\(jobID.uuidString)"
     }
 }

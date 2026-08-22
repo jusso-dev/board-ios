@@ -128,6 +128,18 @@ struct APIDecodingTests {
         #expect(event.kind == .status)
         #expect(event.line == "running")
     }
+
+    @Test("Repeated SSE chunks receive distinct local identities")
+    func repeatedSSEChunksHaveDistinctIDs() throws {
+        let line = "data: {\"timestamp\":\"2026-08-22T01:02:03Z\",\"kind\":\"log\",\"line\":\" the\"}"
+        let first = try #require(try SSEParser.event(from: line))
+        let second = try #require(try SSEParser.event(from: line))
+
+        #expect(first.id != second.id)
+        #expect(first.timestamp == second.timestamp)
+        #expect(first.kind == second.kind)
+        #expect(first.line == second.line)
+    }
 }
 
 @Suite("Repository search")

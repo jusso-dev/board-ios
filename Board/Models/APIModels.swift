@@ -256,11 +256,38 @@ struct JobEvent: Codable, Identifiable, Equatable, Hashable, Sendable {
         case log
     }
 
+    let id: UUID
     let timestamp: Date
     let kind: Kind
     let line: String
 
-    var id: String { "\(timestamp.timeIntervalSince1970)-\(kind.rawValue)-\(line)" }
+    init(id: UUID = UUID(), timestamp: Date, kind: Kind, line: String) {
+        self.id = id
+        self.timestamp = timestamp
+        self.kind = kind
+        self.line = line
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case timestamp
+        case kind
+        case line
+    }
+
+    init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = UUID()
+        timestamp = try values.decode(Date.self, forKey: .timestamp)
+        kind = try values.decode(Kind.self, forKey: .kind)
+        line = try values.decode(String.self, forKey: .line)
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(timestamp, forKey: .timestamp)
+        try values.encode(kind, forKey: .kind)
+        try values.encode(line, forKey: .line)
+    }
 }
 
 struct ErrorResponse: Codable, Equatable, Sendable {
