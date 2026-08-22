@@ -10,6 +10,7 @@
 		02772143C8520F84A4269484 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5D37A83431FCD107BBE51FE /* RootView.swift */; };
 		17776F8C63BFEC257A01C6BE /* BoardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AEDA2723F5365AFF3BF9876 /* BoardTests.swift */; };
 		1D40708EAC6990CE6DE35470 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E42046B3804D59F3D7994B91 /* SettingsView.swift */; };
+		20C0C9C280A5DF6D2CC11569 /* RepositoryPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 267BBA7DB49288BDF2D3CF65 /* RepositoryPickerView.swift */; };
 		304F8D2FBE3A4F82174C68DF /* CardCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E7EB070F1267290C2420981 /* CardCache.swift */; };
 		349730950A8F8668926C0A70 /* APIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 063D861009216F5DFD3BD990 /* APIModels.swift */; };
 		4C9E24ECBFA81887D99F39AD /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEC7B941ABEA9693356294B2 /* AppModel.swift */; };
@@ -17,6 +18,7 @@
 		514166DDF63B864424521769 /* KanbanColumnView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23F0871F30E87F7433C19548 /* KanbanColumnView.swift */; };
 		61EB041890F7B6FB83374B1D /* RunJobSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEA3103B3E89848A0172F4DF /* RunJobSheet.swift */; };
 		6B2C6EC7E0E096E1AFBE657D /* MockBoardAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 236BCFD22E3D1105A14EC604 /* MockBoardAPIClient.swift */; };
+		6D0F24D9DA84B7ECED46FDAD /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BA3C802B107EAD3EE836F4C3 /* Assets.xcassets */; };
 		7E201F345B42E38C34830B5F /* BoardFlowUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B34DA0C185B8D6398B82BFFD /* BoardFlowUITests.swift */; };
 		82ADD4BF23241E217EC758BD /* CredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51792AFDF8C565E0F2815774 /* CredentialStore.swift */; };
 		8CEF1971500C4A39750F2B53 /* BoardShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9B85359A6C3D636036BF97D /* BoardShellView.swift */; };
@@ -53,6 +55,7 @@
 		208FA8DAA432004A92985B8F /* CreateCardSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateCardSheet.swift; sourceTree = "<group>"; };
 		236BCFD22E3D1105A14EC604 /* MockBoardAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockBoardAPIClient.swift; sourceTree = "<group>"; };
 		23F0871F30E87F7433C19548 /* KanbanColumnView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KanbanColumnView.swift; sourceTree = "<group>"; };
+		267BBA7DB49288BDF2D3CF65 /* RepositoryPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepositoryPickerView.swift; sourceTree = "<group>"; };
 		37EF53EE2E1DAACAB2D08F70 /* ServerLinkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerLinkView.swift; sourceTree = "<group>"; };
 		40875DB9324459E0500EB3AA /* ServerURLValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerURLValidator.swift; sourceTree = "<group>"; };
 		4AEDA2723F5365AFF3BF9876 /* BoardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardTests.swift; sourceTree = "<group>"; };
@@ -66,6 +69,7 @@
 		B303A8FBD0CDE10BCBFA5C1E /* BoardAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardAPIClient.swift; sourceTree = "<group>"; };
 		B34DA0C185B8D6398B82BFFD /* BoardFlowUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardFlowUITests.swift; sourceTree = "<group>"; };
 		B4693D4C5328DB9DB3268473 /* BoardApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardApp.swift; sourceTree = "<group>"; };
+		BA3C802B107EAD3EE836F4C3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		C5D37A83431FCD107BBE51FE /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		D9B85359A6C3D636036BF97D /* BoardShellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardShellView.swift; sourceTree = "<group>"; };
 		E42046B3804D59F3D7994B91 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -128,6 +132,7 @@
 		697D826F1DE507480D69FF79 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				BA3C802B107EAD3EE836F4C3 /* Assets.xcassets */,
 				6A22200D9892FE680C7C17BB /* Board.entitlements */,
 			);
 			path = Resources;
@@ -196,6 +201,7 @@
 				76621B8ECA901C9565184F5D /* BoardView.swift */,
 				208FA8DAA432004A92985B8F /* CreateCardSheet.swift */,
 				23F0871F30E87F7433C19548 /* KanbanColumnView.swift */,
+				267BBA7DB49288BDF2D3CF65 /* RepositoryPickerView.swift */,
 			);
 			path = Board;
 			sourceTree = "<group>";
@@ -251,6 +257,7 @@
 			buildConfigurationList = CF446FC14DB1F7E7619DF26D /* Build configuration list for PBXNativeTarget "Board" */;
 			buildPhases = (
 				ED50ADD3BE7B1E1E8C62A7B6 /* Sources */,
+				6E5ECD00DACC4AA7619455D0 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -341,6 +348,17 @@
 		};
 /* End PBXProject section */
 
+/* Begin PBXResourcesBuildPhase section */
+		6E5ECD00DACC4AA7619455D0 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6D0F24D9DA84B7ECED46FDAD /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		E0EF6FB4A01BB244F33D977F /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -376,6 +394,7 @@
 				BC5CB846144E69A50885DA46 /* JobView.swift in Sources */,
 				514166DDF63B864424521769 /* KanbanColumnView.swift in Sources */,
 				6B2C6EC7E0E096E1AFBE657D /* MockBoardAPIClient.swift in Sources */,
+				20C0C9C280A5DF6D2CC11569 /* RepositoryPickerView.swift in Sources */,
 				02772143C8520F84A4269484 /* RootView.swift in Sources */,
 				61EB041890F7B6FB83374B1D /* RunJobSheet.swift in Sources */,
 				EF47F9D6BA94D00744E01595 /* ServerLinkView.swift in Sources */,

@@ -74,6 +74,12 @@ actor MockBoardAPIClient: BoardAPIClientProtocol {
                 description: "Native iOS client for board-api",
                 url: Self.url("https://github.com/jusso-dev/board-ios"),
                 isPrivate: false
+            ),
+            Repo(
+                nameWithOwner: "other-org/operations",
+                description: "Organisation operations workspace",
+                url: Self.url("https://github.com/other-org/operations"),
+                isPrivate: true
             )
         ]
     }

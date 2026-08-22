@@ -25,9 +25,6 @@ targets:
       - path: Board
         excludes:
           - Resources/Info.plist
-          - Resources/Assets.xcassets
-    resources:
-      - path: Board/Resources/Assets.xcassets
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: au.com.yumait.board

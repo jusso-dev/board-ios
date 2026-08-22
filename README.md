@@ -1,29 +1,88 @@
 # Board
 
-Board is a native SwiftUI client for `board-api`, the Rust service running on Justin Middler's Ubuntu `board` guest. It links over LAN or Tailscale, presents GitHub issues as a five-column kanban, and starts coding harness jobs on the guest.
+![Board iOS banner](docs/board-ios-banner.png)
 
-The phone never receives a GitHub PAT or vendor CLI credential. It only sends authenticated requests to `board-api`.
+Board is a native SwiftUI client for [`board-api`](https://github.com/jusso-dev/board-api), the Rust service that runs on Justin Middler's Ubuntu `board` guest. It presents GitHub issues as a five-column kanban and lets a phone start, follow, and cancel coding-harness jobs running safely on the guest.
+
+The app talks only to Board API over LAN or Tailscale. It does not contain a GitHub PAT, vendor token, embedded coding agent, or GitHub SDK. GitHub and vendor authentication stay on the server.
 
 ![Board showing the mock repository in dark mode](docs/board-simulator.png)
 
+## What the app does
+
+- Links to one self-hosted Board API with a short-lived pair code.
+- Stores the returned `board_` token and server ID in Keychain.
+- Shows repositories visible to the GitHub account signed in on the server, including other organisations and direct collaborations.
+- Searches repository owner, name, and description locally as you type.
+- Displays open GitHub issues in `backlog`, `ready`, `running`, `review`, and `done`.
+- Creates cards and moves them with drag and drop or explicit move actions.
+- Starts `grok`, `codex`, or `cursor` jobs on the server, including an ordered sequential crew.
+- Streams job logs and status with server-sent events and can cancel a running job.
+- Keeps the last successful card list on disk for offline reading.
+
+The phone never clones a repository or executes a coding CLI. It is a focused remote control for the homelab service.
+
 ## Requirements
 
-- iOS 18 or newer
-- Swift 6
-- Xcode 16 or newer
-- XcodeGen to regenerate `Board.xcodeproj` from `project.yml`
-- A reachable `board-api`, preferably at `http://board.<tailnet>.ts.net:8787`
+- macOS with Xcode 16 or newer.
+- iOS 18 or newer for the app target.
+- Swift 6.
+- [XcodeGen](https://github.com/yonaskolb/XcodeGen) to regenerate `Board.xcodeproj` from `project.yml`.
+- A reachable Board API for real data, or the built-in mock for UI work.
 
-The app is iPhone-first and remains readable on iPad. It supports light and dark appearances, Dynamic Type, VoiceOver labels, drag and drop, and explicit move actions.
+Board is iPhone-first and remains readable on iPad. It supports light and dark appearances, Dynamic Type, VoiceOver labels, swipe actions, drag and drop, and explicit movement controls.
 
-## Build
+## Open and run in Xcode
+
+Install XcodeGen if it is not already available:
 
 ```sh
+brew install xcodegen
+```
+
+Generate the checked-in Xcode project and open it:
+
+```sh
+git clone https://github.com/jusso-dev/board-ios.git
+cd board-ios
 xcodegen generate
 open Board.xcodeproj
 ```
 
-Command-line build and test:
+In Xcode:
+
+1. Select the `Board` scheme.
+2. Choose an iOS 18 or newer simulator, or a signed iPhone target.
+3. Press Run.
+4. Enter a reachable Board API URL and pair code on first launch.
+
+The project file is generated from [`project.yml`](project.yml). Change that specification and regenerate rather than hand-editing `Board.xcodeproj/project.pbxproj`.
+
+## Run without a server
+
+The deterministic mock implements the same client protocol and JSON models as the real client. To explore the complete UI without a running guest, edit the Board scheme's Run arguments and add:
+
+```text
+-board-ui-testing
+-reset-state
+```
+
+The first flag selects `MockBoardAPIClient`. The second clears local launch state for a fresh pairing flow. These flags are intended for development and UI tests only; normal launches always use `BoardAPIClient`.
+
+## Command-line build and tests
+
+Build the app for a generic simulator:
+
+```sh
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
+  xcodebuild build \
+  -project Board.xcodeproj \
+  -scheme Board \
+  -configuration Debug \
+  -destination 'generic/platform=iOS Simulator'
+```
+
+Run unit and UI tests on an installed simulator:
 
 ```sh
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
@@ -33,61 +92,164 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
 ```
 
-The checked-in Xcode project is generated from `project.yml`. Edit the source specification and regenerate instead of hand-editing the project file.
+If that device name is unavailable, list installed destinations with `xcrun simctl list devices available` and substitute one from the output.
 
-## Link a server
+## Link the Ubuntu server
 
 On first launch:
 
-1. Enter the LAN, Tailscale IP, or Tailscale MagicDNS URL for `board-api`.
-2. Test `GET /v1/health`.
-3. Enter the current eight-character pair code shown on the Ubuntu guest.
-4. Pair once. The returned `board_` token and server ID are stored in Keychain.
+1. Enter the LAN, Tailscale IP, or MagicDNS base URL.
+2. Tap Test Connection. The app calls open route `GET /v1/health`.
+3. Enter the current eight-character pair code from the guest.
+4. Tap Pair. The app sends `POST /v1/pair` once.
+5. Board stores the returned token and server ID in Keychain, then loads `GET /v1/server`.
 
-The base URL is stored in app preferences because it is not a secret. Settings can verify a replacement URL against the linked server ID or forget the local credential. A `401` clears the rejected credential and returns to pairing.
+Valid direct examples are:
+
+```text
+http://192.168.1.50:8787
+http://100.100.100.100:8787
+http://board.<tailnet>.ts.net:8787
+```
+
+When the server operator has explicitly configured Tailscale Serve, use its HTTPS URL with no port:
+
+```text
+https://board.<tailnet>.ts.net
+```
+
+Do not use `https://board.<tailnet>.ts.net:8787` for the default deployment. Port 8787 is the API's direct HTTP listener, while optional Tailscale Serve terminates HTTPS on the standard port.
+
+### Pair-code QR
+
+On a fresh server with no API keys, Board API prints both the pair code and a terminal QR in `/home/board/HOST.md` and journald. The QR contains the code only. The current app does not request camera access or include a QR scanner. You can scan the QR with the standard iPhone Camera, copy the resulting text, and paste it into Board's pair-code field.
+
+After one client pairs, the server no longer prints a first-client code. Existing credentials should be kept. A rejected `401` clears the local token and returns the app to linking.
+
+## Repository selection and search
+
+The repository button opens a searchable sheet. Search is always visible and matches:
+
+- `owner/repository`;
+- repository name;
+- organisation or owner name;
+- repository description.
+
+Filtering happens against the fetched list, so typing does not make one network request per character. Private repositories have a lock indicator, and the selected repository has a checkmark.
+
+The server obtains this list from the GitHub account authenticated as Linux user `board`. It includes repositories available through ownership, direct collaboration, and organisation membership. If an organisation is missing, fix the GitHub identity, token scopes, or organisation authorisation on the server. The app cannot expand server-side GitHub permissions.
+
+## Cards and refresh behaviour
+
+GitHub issues are the only cards. Board API maps these labels to the five columns:
+
+| App column | GitHub label |
+| --- | --- |
+| Backlog | `board:backlog` |
+| Ready | `board:ready` |
+| Running | `board:running` |
+| Review | `board:review` |
+| Done | `board:done` |
+
+The app loads cards when a linked session starts, when the selected repository changes, and when you use Refresh. There is no timer-based background polling. The server performs a fresh GitHub issue read for each card request, so an issue created by Grokbot or another GitHub client appears on the next refresh when it is open and has one `board:*` column label.
+
+Creating a card calls `POST /v1/cards`. Moving a card calls `PATCH /v1/cards/{number}` and updates the interface optimistically. If the request fails, the card rolls back to its previous column and an error is shown.
+
+## Start and follow a job
+
+Open a card and tap Run, then choose:
+
+- one primary harness: Grok, Codex, or Cursor;
+- an optional prompt;
+- an optional ordered crew, which the server executes sequentially.
+
+`POST /v1/jobs` starts the work on the Ubuntu guest. The job screen consumes `GET /v1/jobs/{id}/events` as a server-sent event stream and shows status and log lines. Cancel calls `POST /v1/jobs/{id}/cancel`.
+
+Only one job may run per repository. A `409 Conflict` makes the app show the existing job rather than pretending a second run started. Successful jobs display `prUrl` when the server created a pull request. Failed jobs retain the log tail for diagnosis.
 
 ## Network and ATS policy
 
-`Info.plist` enables local networking and has one insecure HTTP exception domain, `ts.net`, including subdomains. `ServerURLValidator` applies the narrower runtime rule:
+[`Info.plist`](Board/Resources/Info.plist) enables local networking and contains one insecure HTTP exception domain, `ts.net`, including subdomains. `ServerURLValidator` applies the narrower runtime policy:
 
 - HTTPS is accepted.
 - HTTP is accepted only for RFC1918 addresses, Tailscale's `100.64.0.0/10` range, and `*.ts.net`.
-- Public HTTP, credentials in URLs, paths, query strings, and fragments are rejected.
+- Public HTTP is rejected.
+- Credentials in URLs, paths, query strings, and fragments are rejected.
 
-No broad `NSAllowsArbitraryLoads` exception is present.
+There is no broad `NSAllowsArbitraryLoads` exception. A failed connection is reported as a short timeout, ATS, URL, or port error rather than silently trying another authentication scheme.
 
 ## API contract
 
-[`openapi.yaml`](openapi.yaml) is copied byte-for-byte from the Rust `board-api` repository and is the client contract. The app uses these routes:
+[`openapi.yaml`](openapi.yaml) is copied byte-for-byte from the Rust repository and is the client contract. The app uses these routes:
 
 | Purpose | Route |
 | --- | --- |
 | Health and pairing | `GET /v1/health`, `POST /v1/pair` |
 | Server details | `GET /v1/server` |
-| Repositories | `GET /v1/repos` |
+| Repository picker | `GET /v1/repos` |
 | Cards | `GET /v1/cards`, `POST /v1/cards`, `GET /v1/cards/{number}`, `PATCH /v1/cards/{number}` |
 | Jobs | `GET /v1/jobs`, `POST /v1/jobs`, `GET /v1/jobs/{id}`, `POST /v1/jobs/{id}/cancel` |
 | Job events | `GET /v1/jobs/{id}/events` |
 
-Authenticated requests send `Authorization: Bearer board_...`. Server-sent events are consumed as an asynchronous stream. JSON keys remain camelCase and dates remain ISO 8601.
+Authenticated requests send `Authorization: Bearer board_...`. JSON keys remain camelCase and dates remain ISO 8601.
 
 ### Contract gaps handled explicitly
 
 - The API does not return issue comments, so card details state that comments are unavailable.
 - Cards do not embed active jobs or pull requests. The app joins cards to `GET /v1/jobs` by repository and issue number.
-- The current API statuses are `queued`, `running`, `cancelling`, `cancelled`, `succeeded`, and `failed`. A successful job shows `prUrl` when supplied; the client does not invent `pr_open` or `done` values.
-- `/v1/keys` exists in the server contract but is not used by the app. New keys remain a server-side operation.
+- Current API statuses are `queued`, `running`, `cancelling`, `cancelled`, `succeeded`, and `failed`.
+- A successful job shows `prUrl` when supplied. The client does not invent `pr_open` or `done` status values.
+- `/v1/keys` exists in the server contract but is not used by the app. Minting additional keys remains an authenticated server operation.
 
-## Local storage
+## Architecture
 
-- `board_` token and server ID: Keychain generic-password item, accessible only when the device is unlocked and not migrated to another device.
-- Base URL and first-launch marker: app preferences.
-- Last successful card lists: protected JSON files in the app cache directory, excluded from backup.
+The app uses SwiftUI with the Observation framework and a small model-driven structure:
 
-Cached cards remain readable offline. Creating, moving, running, and cancelling require the server.
+| Area | Responsibility |
+| --- | --- |
+| `Board/App` | App entry point, root flow, and observable application model |
+| `Board/API` | Codable contract models, URL validation, HTTP client, and SSE decoding |
+| `Board/Views` | Pairing, board, card, repository, job, and settings screens |
+| `Board/Security` | Keychain-backed credentials |
+| `Board/Persistence` | Protected on-disk card cache |
+| `Board/Mock` | Deterministic local API implementation for tests and previews |
+| `BoardTests` | Unit and integration-style model tests |
+| `BoardUITests` | Full simulator user flow |
 
-## Test support
+No UIKit is used unless a platform integration requires it. There is no CloudKit, GitHub SDK, React Native, Flutter, or embedded web application.
 
-`MockBoardAPIClient` implements the same protocol and exact JSON model surface for deterministic tests. It is selected only when the app launches with `-board-ui-testing`; production launches always use `BoardAPIClient`.
+## Local data and security
 
-The automated coverage includes URL policy, OpenAPI model decoding, SSE decoding, Keychain persistence, disk cache persistence, optimistic rollback, repository conflict handling, and a Simulator flow that pairs, creates and moves a card, starts a Codex job, receives an event, cancels, and relaunches with its Keychain credential.
+- `board_` token and server ID: Keychain generic-password item, accessible only while the device is unlocked and not migrated to another device.
+- Base URL and first-launch marker: app preferences because neither is a secret.
+- Last successful cards: protected JSON in the app cache directory, excluded from backup.
+- Logs: never include the board token, pair code, GitHub credentials, or vendor credentials.
+
+Cached cards remain readable offline. Creating, moving, running, and cancelling always require the server.
+
+## Test coverage
+
+`MockBoardAPIClient` implements the same protocol and model surface for deterministic tests. Automated coverage includes:
+
+- base URL and ATS policy;
+- OpenAPI model decoding;
+- cross-organisation repository search;
+- server-sent event decoding;
+- Keychain persistence;
+- protected disk cache persistence;
+- optimistic move rollback;
+- one-job-per-repository conflict handling;
+- a Simulator flow that pairs, searches another organisation, switches repositories, creates and moves a card, starts a Codex job, receives an event, cancels, and relaunches with its Keychain credential.
+
+## Troubleshooting
+
+- **Health fails:** confirm the phone can reach the guest, use `http` with `:8787` for the direct listener, and test the same URL in Safari or with `curl` from another Tailscale device.
+- **Pairing fails:** use the current unexpired code, preserve all eight characters, and confirm no client already consumed it.
+- **Repository missing:** run `gh auth status` as user `board` on the guest and check organisation SSO or token scope.
+- **Cards missing:** refresh, then confirm each open issue has exactly one supported `board:*` label.
+- **Harness missing:** install and sign in to that CLI as user `board`; the iOS app cannot hold or repair vendor credentials.
+- **Job returns 409:** open the existing job for that repository or cancel it before starting another.
+
+## License
+
+UNLICENSED. No permission is granted to copy, modify, or redistribute this code beyond rights provided by applicable law.

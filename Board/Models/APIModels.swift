@@ -131,6 +131,14 @@ struct Repo: Codable, Identifiable, Equatable, Hashable, Sendable {
 
     var id: String { nameWithOwner }
     var shortName: String { nameWithOwner.split(separator: "/").last.map(String.init) ?? nameWithOwner }
+    var ownerName: String { nameWithOwner.split(separator: "/").first.map(String.init) ?? nameWithOwner }
+
+    func matchesRepositorySearch(_ searchText: String) -> Bool {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return true }
+        return nameWithOwner.localizedCaseInsensitiveContains(query)
+            || description?.localizedCaseInsensitiveContains(query) == true
+    }
 }
 
 struct Card: Codable, Identifiable, Equatable, Hashable, Sendable {

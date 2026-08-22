@@ -14,10 +14,36 @@ final class BoardFlowUITests: XCTestCase {
         XCTAssertTrue(element("server-summary").exists)
         XCTAssertTrue(element("column-backlog").exists)
 
+        searchAcrossOrganisations()
         createCard()
         moveExistingCard()
         startAndCancelJob()
         proveKeychainPersistence()
+    }
+
+    private func searchAcrossOrganisations() {
+        let picker = app.buttons["repo-picker"]
+        picker.tap()
+
+        let search = app.searchFields["Search repositories"]
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap()
+        search.typeText("other-org")
+
+        let organisationRepo = app.buttons["repo-other-org/operations"]
+        XCTAssertTrue(organisationRepo.waitForExistence(timeout: 5))
+        organisationRepo.tap()
+        XCTAssertEqual(picker.value as? String, "other-org/operations")
+
+        picker.tap()
+        let secondSearch = app.searchFields["Search repositories"]
+        XCTAssertTrue(secondSearch.waitForExistence(timeout: 5))
+        secondSearch.tap()
+        secondSearch.typeText("board-api")
+        let boardAPI = app.buttons["repo-jusso-dev/board-api"]
+        XCTAssertTrue(boardAPI.waitForExistence(timeout: 5))
+        boardAPI.tap()
+        XCTAssertEqual(picker.value as? String, "jusso-dev/board-api")
     }
 
     private func linkServer() {

@@ -105,6 +105,25 @@ struct APIDecodingTests {
     }
 }
 
+@Suite("Repository search")
+struct RepositorySearchTests {
+    @Test("Matches owner, repository, and description without case sensitivity")
+    func matchesVisibleRepositoryFields() throws {
+        let repo = Repo(
+            nameWithOwner: "Example-Org/Operations",
+            description: "Deployment control plane",
+            url: try #require(URL(string: "https://github.com/Example-Org/Operations")),
+            isPrivate: true
+        )
+
+        #expect(repo.matchesRepositorySearch("example-org"))
+        #expect(repo.matchesRepositorySearch("OPERATIONS"))
+        #expect(repo.matchesRepositorySearch("control plane"))
+        #expect(repo.matchesRepositorySearch(""))
+        #expect(!repo.matchesRepositorySearch("unrelated"))
+    }
+}
+
 @Suite("Credential storage", .serialized)
 struct CredentialStorageTests {
     @Test("Keychain round-trip stores token and server ID together")

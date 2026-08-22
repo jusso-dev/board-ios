@@ -4,6 +4,7 @@ struct BoardShellView: View {
     @Environment(AppModel.self) private var model
     @Binding var baseURLString: String
     @State private var createColumn: BoardColumn?
+    @State private var showsRepoPicker = false
     @State private var showsSettings = false
 
     var body: some View {
@@ -67,6 +68,14 @@ struct BoardShellView: View {
         .sheet(item: $createColumn) { column in
             CreateCardSheet(initialColumn: column)
         }
+        .sheet(isPresented: $showsRepoPicker) {
+            RepositoryPickerView(
+                repositories: model.repos,
+                selectedRepository: model.selectedRepo
+            ) { repo in
+                Task { await model.selectRepo(repo.nameWithOwner) }
+            }
+        }
         .sheet(isPresented: $showsSettings) {
             SettingsView(baseURLString: $baseURLString)
         }
@@ -77,22 +86,16 @@ struct BoardShellView: View {
     }
 
     private var repoPicker: some View {
-        Menu {
-            ForEach(model.repos) { repo in
-                Button {
-                    Task { await model.selectRepo(repo.nameWithOwner) }
-                } label: {
-                    Label(
-                        repo.nameWithOwner,
-                        systemImage: repo.nameWithOwner == model.selectedRepo
-                            ? "checkmark"
-                            : (repo.isPrivate ? "lock" : "shippingbox")
-                    )
-                }
-            }
+        Button {
+            showsRepoPicker = true
         } label: {
-            Label("Repository", systemImage: "chevron.down")
-                .labelStyle(.titleAndIcon)
+            HStack(spacing: 5) {
+                Image(systemName: "shippingbox")
+                Text(navigationTitle)
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.caption2)
+            }
         }
         .accessibilityLabel("Choose repository")
         .accessibilityValue(model.selectedRepo ?? "None")
