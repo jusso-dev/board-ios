@@ -133,7 +133,7 @@ After one client pairs, the server no longer prints a first-client code. Existin
 
 ## Repository selection and search
 
-Board opens with **All work** selected. This is the cross-repository queue returned by Board API 0.8.0. Every row shows its `owner/repository`, issue number, column, latest harness/job state, and a pull-request link when one was actually recorded. The summary at the top counts running, pending, review, and affected repositories. Cards are grouped in operational order: Running, Ready, Review, Backlog, then Done.
+Board opens with **All work** selected. This is the cross-repository queue returned by Board API 0.8.1. Every row shows its `owner/repository`, issue number, column, latest harness/job state, and a pull-request link when one was actually recorded. The summary at the top counts running, pending, review, and affected repositories. Cards are grouped in operational order: Running, Ready, Review, Backlog, then Done.
 
 The repository button is now a filter, not a required first choice. Choose **All work** to return to the overview, or choose one repository for its five-column kanban. The sheet search is always visible and matches:
 
