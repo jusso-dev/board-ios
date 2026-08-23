@@ -22,6 +22,8 @@ final class AppModel {
     private(set) var selectedRepo: String?
     private(set) var cards: [Card] = []
     private(set) var overviewCards: [RepositoryCard] = []
+    private(set) var commentsByCard: [String: [IssueComment]] = [:]
+    private(set) var loadingCommentKeys: Set<String> = []
     private(set) var jobs: [JobRecord] = []
     private(set) var eventsByJob: [UUID: [JobEvent]] = [:]
     private(set) var isLoadingBoard = false
@@ -153,6 +155,13 @@ final class AppModel {
         }
     }
 
+    func refreshFromUserGesture() async {
+        let refresh = Task { @MainActor [weak self] in
+            await self?.reloadBoard()
+        }
+        await refresh.value
+    }
+
     func refreshWhenActive() async {
         guard phase == .linked, currentBaseURL != nil else { return }
         await reloadBoard()
@@ -199,7 +208,7 @@ final class AppModel {
                 await forgetLink(clearCache: false)
                 return
             }
-            let serverIsOnline = await serverIsReachable(baseURL: baseURL)
+            guard let serverIsOnline = await serverIsReachable(baseURL: baseURL) else { return }
             if let cached = try? await cache.loadOverview(), selectedRepo == nil {
                 overviewCards = cached.cards
                 isOverviewPartial = false
@@ -257,7 +266,7 @@ final class AppModel {
                 await forgetLink(clearCache: false)
                 return
             }
-            let serverIsOnline = await serverIsReachable(baseURL: baseURL)
+            guard let serverIsOnline = await serverIsReachable(baseURL: baseURL) else { return }
             if let cached = try? await cache.load(repo: repo), selectedRepo == repo {
                 cards = cached.cards
                 isOffline = !serverIsOnline
@@ -316,6 +325,97 @@ final class AppModel {
             upsertOverview(value, repo: selectedRepo)
         } catch {
             handle(error, title: "Card unavailable")
+        }
+    }
+
+    func comments(number: Int) -> [IssueComment] {
+        guard let selectedRepo else { return [] }
+        return commentsByCard[commentKey(repo: selectedRepo, number: number), default: []]
+    }
+
+    func isLoadingComments(number: Int) -> Bool {
+        guard let selectedRepo else { return false }
+        return loadingCommentKeys.contains(commentKey(repo: selectedRepo, number: number))
+    }
+
+    func loadComments(number: Int) async {
+        guard !isOffline, let baseURL = currentBaseURL, let repo = selectedRepo else { return }
+        let key = commentKey(repo: repo, number: number)
+        guard loadingCommentKeys.insert(key).inserted else { return }
+        defer { loadingCommentKeys.remove(key) }
+
+        do {
+            var values: [IssueComment] = []
+            var page = 1
+            var hasMore: Bool
+            repeat {
+                let response = try await read {
+                    try await api.comments(
+                        baseURL: baseURL,
+                        repo: repo,
+                        number: number,
+                        page: page,
+                        perPage: 50
+                    )
+                }
+                values.append(contentsOf: response.items)
+                hasMore = response.hasMore
+                page += 1
+            } while hasMore
+
+            guard selectedRepo == repo else { return }
+            commentsByCard[key] = values.sorted { $0.id < $1.id }
+        } catch {
+            if isCancellation(error) {
+                return
+            }
+            if isAuthenticationError(error) {
+                await forgetLink(clearCache: false)
+            } else {
+                handle(error, title: "Comments unavailable")
+            }
+        }
+    }
+
+    @discardableResult
+    func addComment(number: Int, body: String) async -> Bool {
+        guard !isOffline else {
+            notice = Notice(title: "Server required", message: "Reconnect before posting a comment.")
+            return false
+        }
+        guard let baseURL = currentBaseURL, let repo = selectedRepo else { return false }
+        let cleanBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanBody.isEmpty else {
+            notice = Notice(title: "Comment required", message: "Describe the follow-up work or fix.")
+            return false
+        }
+        guard cleanBody.utf8.count <= 65_536 else {
+            notice = Notice(title: "Comment too long", message: "Keep the comment under 65,536 bytes.")
+            return false
+        }
+
+        do {
+            let value = try await api.createComment(
+                baseURL: baseURL,
+                repo: repo,
+                number: number,
+                request: CreateCommentRequest(body: cleanBody)
+            )
+            guard selectedRepo == repo else { return true }
+            let key = commentKey(repo: repo, number: number)
+            if !commentsByCard[key, default: []].contains(where: { $0.id == value.id }) {
+                commentsByCard[key, default: []].append(value)
+                commentsByCard[key]?.sort { $0.id < $1.id }
+            }
+            await loadCard(number: number)
+            return true
+        } catch {
+            if isAuthenticationError(error) {
+                await forgetLink(clearCache: false)
+            } else {
+                handle(error, title: "Comment not posted")
+            }
+            return false
         }
     }
 
@@ -579,6 +679,8 @@ final class AppModel {
         selectedRepo = nil
         cards = []
         overviewCards = []
+        commentsByCard = [:]
+        loadingCommentKeys = []
         jobs = []
         eventsByJob = [:]
         currentBaseURL = nil
@@ -646,12 +748,16 @@ final class AppModel {
         }
     }
 
-    private func serverIsReachable(baseURL: URL) async -> Bool {
+    private func serverIsReachable(baseURL: URL) async -> Bool? {
         do {
             return try await read { try await api.health(baseURL: baseURL) }.ok
         } catch {
-            return false
+            return isCancellation(error) ? nil : false
         }
+    }
+
+    private func commentKey(repo: String, number: Int) -> String {
+        "\(repo)#\(number)"
     }
 
     @discardableResult

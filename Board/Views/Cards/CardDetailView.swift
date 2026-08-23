@@ -6,6 +6,8 @@ struct CardDetailView: View {
 
     @State private var showsRunSheet = false
     @State private var destinationJobID: UUID?
+    @State private var commentBody = ""
+    @State private var isPostingComment = false
 
     var body: some View {
         Group {
@@ -19,6 +21,7 @@ struct CardDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task(id: number) {
             await model.loadCard(number: number)
+            await model.loadComments(number: number)
             await model.refreshJobs(showError: false)
         }
         .sheet(isPresented: $showsRunSheet) {
@@ -98,13 +101,7 @@ struct CardDetailView: View {
                     }
                 }
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Comments")
-                        .font(.headline)
-                    Text("Comments are not supplied by board-api 0.1.0.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
+                commentsSection
 
                 jobSection(card)
 
@@ -124,6 +121,94 @@ struct CardDetailView: View {
             .frame(maxWidth: .infinity)
         }
         .background(Color(.systemGroupedBackground))
+    }
+
+    private var commentsSection: some View {
+        let comments = model.comments(number: number)
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Comments")
+                    .font(.headline)
+                Spacer()
+                if model.isLoadingComments(number: number) {
+                    ProgressView()
+                        .controlSize(.small)
+                        .accessibilityLabel("Loading comments")
+                }
+            }
+
+            if model.isOffline {
+                Label("Reconnect to load and post comments.", systemImage: "wifi.slash")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            } else if comments.isEmpty && !model.isLoadingComments(number: number) {
+                Text("No comments yet.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            ForEach(comments) { comment in
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(comment.author ?? "Deleted GitHub user")
+                            .font(.subheadline.weight(.semibold))
+                        Spacer()
+                        Link(destination: comment.url) {
+                            Text(comment.createdAt, format: .relative(presentation: .named))
+                                .font(.caption)
+                        }
+                        .accessibilityLabel("Open comment on GitHub")
+                    }
+                    Text(comment.body)
+                        .font(.body)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(12)
+                .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 11))
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("comment-\(comment.id)")
+            }
+
+            Divider()
+
+            Text("Add follow-up")
+                .font(.subheadline.weight(.semibold))
+            TextField("Describe follow-up work or a fix", text: $commentBody, axis: .vertical)
+                .lineLimit(3...8)
+                .textFieldStyle(.roundedBorder)
+                .disabled(model.isOffline || isPostingComment)
+                .accessibilityIdentifier("comment-body-field")
+
+            Button(action: postComment) {
+                if isPostingComment {
+                    ProgressView()
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                } else {
+                    Label("Post comment", systemImage: "paperplane.fill")
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+            }
+            .buttonStyle(.bordered)
+            .disabled(
+                model.isOffline
+                    || isPostingComment
+                    || commentBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            )
+            .accessibilityHint("Posts to the GitHub issue as the authorised server identity")
+            .accessibilityIdentifier("post-comment-button")
+        }
+    }
+
+    private func postComment() {
+        guard !isPostingComment else { return }
+        isPostingComment = true
+        Task {
+            if await model.addComment(number: number, body: commentBody) {
+                commentBody = ""
+            }
+            isPostingComment = false
+        }
     }
 
     @ViewBuilder

@@ -30,7 +30,7 @@ actor KeychainCredentialStore: CredentialStore {
     private let service: String
     private let account = "linked-server"
 
-    init(service: String = "au.com.yumait.board.credentials") {
+    init(service: String = "com.example.board.credentials") {
         self.service = service
     }
 

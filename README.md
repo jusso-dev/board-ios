@@ -2,7 +2,7 @@
 
 ![Board iOS banner](docs/board-ios-banner.png)
 
-Board is a native SwiftUI client for [`board-api`](https://github.com/jusso-dev/board-api), the Rust service that runs on Justin Middler's Ubuntu `board` guest. It presents GitHub issues as a five-column kanban and lets a phone start, follow, and cancel coding-harness jobs running safely on the guest.
+Board is a native SwiftUI client for [`board-api`](../board-api), a self-hosted Rust service for an Ubuntu guest or server. It presents GitHub issues as a five-column kanban and lets a phone start, follow, and cancel coding-harness jobs running safely on that host.
 
 The app talks only to Board API over LAN or Tailscale. It does not contain a GitHub PAT, vendor token, embedded coding agent, or GitHub SDK. GitHub and vendor authentication stay on the server.
 
@@ -18,6 +18,7 @@ The app talks only to Board API over LAN or Tailscale. It does not contain a Git
 - Searches repository owner, name, and description locally as you type.
 - Displays open GitHub issues in `backlog`, `ready`, `running`, `review`, and `done`.
 - Creates cards and moves them with drag and drop or explicit move actions.
+- Reads issue comments and posts follow-up notes from card detail.
 - Moving a card to Ready asks an automation-enabled server to start it immediately.
 - Starts `grok`, `codex`, or `cursor` jobs on the server, including an ordered sequential crew.
 - Streams job logs and status with server-sent events and can cancel a running job.
@@ -47,7 +48,7 @@ brew install xcodegen
 Generate the checked-in Xcode project and open it:
 
 ```sh
-git clone https://github.com/jusso-dev/board-ios.git
+git clone https://github.com/YOUR_GITHUB_OWNER/board-ios.git
 cd board-ios
 xcodegen generate
 open Board.xcodeproj
@@ -111,7 +112,7 @@ On first launch:
 Valid direct examples are:
 
 ```text
-http://192.168.1.50:8787
+http://192.168.50.50:8787
 http://100.100.100.100:8787
 http://board.<tailnet>.ts.net:8787
 ```
@@ -132,7 +133,7 @@ After one client pairs, the server no longer prints a first-client code. Existin
 
 ## Repository selection and search
 
-Board opens with **All work** selected. This is the cross-repository queue returned by Board API 0.5.0. Every row shows its `owner/repository`, issue number, column, latest harness/job state, and a pull-request link when one was actually recorded. The summary at the top counts running, pending, review, and affected repositories. Cards are grouped in operational order: Running, Ready, Review, Backlog, then Done.
+Board opens with **All work** selected. This is the cross-repository queue returned by Board API 0.6.0. Every row shows its `owner/repository`, issue number, column, latest harness/job state, and a pull-request link when one was actually recorded. The summary at the top counts running, pending, review, and affected repositories. Cards are grouped in operational order: Running, Ready, Review, Backlog, then Done.
 
 The repository button is now a filter, not a required first choice. Choose **All work** to return to the overview, or choose one repository for its five-column kanban. The sheet search is always visible and matches:
 
@@ -159,11 +160,13 @@ GitHub issues are the only cards. Board API maps these labels to the five column
 
 The app calls `GET /v1/overview` immediately after linking or launching with saved credentials. The API searches all pushable repositories available to its GitHub identity, globally sorts labelled open issues by update time, and paginates one shared 60-second snapshot. This means running and pending work from personal repositories, other organisations, and direct collaborations is visible before you select a project. If one GitHub owner cannot be refreshed, the API lists it in `unavailableOwners`, retains its older cached cards when possible, and the app shows one compact inline warning. Cards from successful owners still load; no alert blocks the board.
 
-Board refreshes the visible card list and jobs whenever iOS returns it to the active foreground. A cancelled background request is discarded, not reported as an outage. Read-only requests retry once after a short delay when a timeout, dropped connection, temporary DNS failure, rate limit, or retryable server response occurs. If card refresh still fails, the app checks `/v1/health`: only a failed health check produces the orange Offline state and disables mutations. A healthy server with delayed GitHub data keeps mutations available and shows a non-blocking saved-data warning. Repository-list failures never hide or block All work.
+Board refreshes the visible card list and jobs whenever iOS returns it to the active foreground. Pull-to-refresh runs through app-owned refresh work so SwiftUI cancelling its gesture task cannot turn a cancelled health probe into a false Offline state. Any cancelled request is discarded, not reported as an outage. Read-only requests retry once after a short delay when a timeout, dropped connection, temporary DNS failure, rate limit, or retryable server response occurs. If card refresh still fails, the app checks `/v1/health`: only a completed failed health check produces the orange Offline state and disables mutations. A healthy server with delayed GitHub data keeps mutations available and shows a non-blocking saved-data warning. Repository-list failures never hide or block All work.
 
 The app reloads the visible view when linked, foregrounded, or when you use Refresh. It loads a single repository when that filter is selected. There is no timer-based polling in the iOS app. Overview pagination, concurrent app requests, and automatic Ready pickup share one server snapshot, preventing GitHub's search quota from being spent once per owner for every request. An issue created by Grokbot or another GitHub client appears after the next snapshot refresh when it is open and has one `board:*` column label.
 
 Creating a card calls `POST /v1/cards`. Moving a card calls `PATCH /v1/cards/{number}` and updates the interface optimistically. If the request fails, the card rolls back to its previous column and an error is shown.
+
+Card detail loads GitHub issue comments with `GET /v1/cards/{number}/comments` and posts a follow-up with `POST /v1/cards/{number}/comments`. The post is made by the GitHub identity authenticated on the server and is rejected unless that identity appears in `allowedIssueAuthors`. When Board builds a later job prompt, it includes only comments authored by users in that allowlist; other GitHub comments remain visible but cannot instruct the coding agent. Board-generated job-status comments are also excluded. The immutable issue-author check still applies independently before any job can run.
 
 On Board API 0.4.0 or newer with `autoRun.enabled`, creating or moving a card to Ready starts a server job immediately only when its immutable GitHub issue author appears in the server's `allowedIssueAuthors` list. A Ready issue created directly on GitHub is selected by the server's background scan under the same rule. Labels, assignees, comments, and the person who moved the card cannot grant execution permission. Harness routing comes from the issue labels:
 
@@ -209,6 +212,7 @@ There is no broad `NSAllowsArbitraryLoads` exception. A failed connection is rep
 | Repository picker | `GET /v1/repos` |
 | All-repository work | `GET /v1/overview` |
 | Cards | `GET /v1/cards`, `POST /v1/cards`, `GET /v1/cards/{number}`, `PATCH /v1/cards/{number}` |
+| Card comments | `GET /v1/cards/{number}/comments`, `POST /v1/cards/{number}/comments` |
 | Jobs | `GET /v1/jobs`, `POST /v1/jobs`, `GET /v1/jobs/{id}`, `POST /v1/jobs/{id}/cancel` |
 | Job events | `GET /v1/jobs/{id}/events` |
 
@@ -216,7 +220,6 @@ Authenticated requests send `Authorization: Bearer board_...`. JSON keys remain 
 
 ### Contract gaps handled explicitly
 
-- The API does not return issue comments, so card details state that comments are unavailable.
 - Overview cards do not embed active jobs or pull requests. The app joins them to `GET /v1/jobs` by repository and issue number.
 - Current API statuses are `queued`, `running`, `cancelling`, `cancelled`, `succeeded`, and `failed`.
 - A successful 0.2.0 server job supplies `prUrl`. A `succeeded` record without it is shown as unverified. The client does not invent `pr_open` or `done` status values.
@@ -261,6 +264,8 @@ Cached cards remain readable offline. Creating, moving, running, and cancelling 
 - Keychain persistence;
 - protected disk cache persistence;
 - foreground refresh after remote card changes;
+- pull-to-refresh without a false Offline transition;
+- paginated comment decoding and authorised follow-up posting;
 - one bounded retry for transient reads;
 - separate healthy-server and offline cache states;
 - optimistic move rollback;
@@ -273,7 +278,9 @@ Cached cards remain readable offline. Creating, moving, running, and cancelling 
 - **Pairing fails:** use the current unexpired code, preserve all eight characters, and confirm no client already consumed it.
 - **Repository missing:** run `gh auth status` as user `board` on the guest and check organisation SSO or token scope.
 - **Cards update only after force quit:** install the current build. Board now refreshes on every foreground activation; older builds only refreshed during initial bootstrap or manual pull-to-refresh.
+- **Pull-to-refresh says Offline:** install the current build. Gesture cancellation is now ignored; Offline is set only after a completed health check fails.
 - **Offline while health works:** install the current build. Offline now requires `/v1/health` to fail; a GitHub data error appears as a non-blocking update warning instead.
+- **Follow-up comment is rejected:** confirm the GitHub identity authenticated as user `board` appears in `allowedIssueAuthors`. Comments by users outside that allowlist remain visible but are excluded from coding-agent prompts.
 - **Refresh warning:** cards remain usable. Named GitHub owners could not be refreshed, normally because GitHub Search is temporarily limited; the server retains their last snapshot and retries after the 60-second cache window.
 - **Cards missing from All work:** wait 60 seconds and refresh, then confirm the open issue has a supported `board:*` label and the server's GitHub identity can push to that repository.
 - **Ready card did not start:** confirm server automation is enabled, the original GitHub issue author is allowed by `allowedIssueAuthors`, use at most one of `agent:grok`, `agent:codex`, or `agent:cursor`, and inspect `journalctl -u board-api`.

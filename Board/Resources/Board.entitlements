@@ -4,7 +4,7 @@
 <dict>
 	<key>keychain-access-groups</key>
 	<array>
-		<string>$(AppIdentifierPrefix)au.com.yumait.board</string>
+		<string>$(AppIdentifierPrefix)com.example.board</string>
 	</array>
 </dict>
 </plist>

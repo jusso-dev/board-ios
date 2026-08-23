@@ -9,7 +9,7 @@ struct ServerURLValidationTests {
         arguments: [
             "http://10.0.0.5:8787",
             "http://172.31.4.9:8787",
-            "http://192.168.1.239:8787",
+            "http://192.168.50.20:8787",
             "http://100.100.20.30:8787",
             "http://board.example.ts.net:8787",
             "https://board.example.com"
@@ -49,7 +49,7 @@ struct APIDecodingTests {
                 "body": "Match the server contract.",
                 "column": "board:review",
                 "labels": ["board:review"],
-                "url": "https://github.com/jusso-dev/board-api/issues/42",
+                "url": "https://github.com/example-user/board-api/issues/42",
                 "createdAt": "2026-08-22T01:02:03Z",
                 "updatedAt": "2026-08-22T02:03:04.123Z"
               }],
@@ -100,20 +100,47 @@ struct APIDecodingTests {
         #expect(page.unavailableOwners == ["offline-org"])
     }
 
+    @Test("Issue comments keep author, body, URL, and pagination")
+    func decodesCommentPage() throws {
+        let data = try #require(
+            """
+            {
+              "items": [{
+                "id": 123456789,
+                "author": "example-user",
+                "body": "Please fix the reconnect path.",
+                "url": "https://github.com/example-user/board-api/issues/42#issuecomment-123456789",
+                "createdAt": "2026-08-23T01:02:03Z",
+                "updatedAt": "2026-08-23T01:03:04Z"
+              }],
+              "page": 1,
+              "perPage": 50,
+              "hasMore": false
+            }
+            """.data(using: .utf8)
+        )
+
+        let page = try BoardJSON.decoder().decode(CommentPage.self, from: data)
+        #expect(page.items.first?.author == "example-user")
+        #expect(page.items.first?.body == "Please fix the reconnect path.")
+        #expect(page.items.first?.url.fragment == "issuecomment-123456789")
+        #expect(!page.hasMore)
+    }
+
     @Test("Job record decodes exact server status and prUrl")
     func decodesJobRecord() throws {
         let data = try #require(
             """
             {
               "id": "0f66c874-326b-4d23-81f8-34895e8e8ff2",
-              "repo": "jusso-dev/board-api",
+              "repo": "example-user/board-api",
               "issue": 42,
               "harness": "codex",
               "crew": ["codex", "cursor"],
               "status": "succeeded",
               "branch": "board/42-0f66c874",
-              "worktree": "/home/board/work/jusso-dev/board-api/0f66c874",
-              "prUrl": "https://github.com/jusso-dev/board-api/pull/7",
+              "worktree": "/home/board/work/example-user/board-api/0f66c874",
+              "prUrl": "https://github.com/example-user/board-api/pull/7",
               "createdAt": "2026-08-22T01:02:03Z",
               "startedAt": "2026-08-22T01:02:04Z",
               "finishedAt": "2026-08-22T01:03:04Z",
@@ -124,7 +151,7 @@ struct APIDecodingTests {
         var job = try BoardJSON.decoder().decode(JobRecord.self, from: data)
         #expect(job.status == .succeeded)
         #expect(job.crew == [.codex, .cursor])
-        #expect(job.prURL?.path == "/jusso-dev/board-api/pull/7")
+        #expect(job.prURL?.path == "/example-user/board-api/pull/7")
         #expect(!job.hasUnverifiedSuccess)
         #expect(job.outcomeSummary.contains("opened a pull request"))
         job.status = .failed
@@ -135,7 +162,7 @@ struct APIDecodingTests {
     func identifiesUnverifiedJob() {
         let job = JobRecord(
             id: UUID(),
-            repo: "jusso-dev/board-api",
+            repo: "example-user/board-api",
             issue: 42,
             harness: .grok,
             crew: [],
@@ -200,7 +227,7 @@ struct RepositorySearchTests {
 struct CredentialStorageTests {
     @Test("Keychain round-trip stores token and server ID together")
     func keychainRoundTrip() async throws {
-        let service = "au.com.yumait.board.tests.\(UUID().uuidString)"
+        let service = "com.example.board.tests.\(UUID().uuidString)"
         let store = KeychainCredentialStore(service: service)
         try await store.clear()
         defer { Task { try? await store.clear() } }
@@ -228,10 +255,10 @@ struct CardCacheTests {
         defer { try? FileManager.default.removeItem(at: root) }
 
         let card = try sampleCard(number: 8, column: .ready)
-        try await cache.save(repo: "jusso-dev/board-api", cards: [card])
-        let loaded = try #require(try await cache.load(repo: "jusso-dev/board-api"))
+        try await cache.save(repo: "example-user/board-api", cards: [card])
+        let loaded = try #require(try await cache.load(repo: "example-user/board-api"))
         #expect(loaded.cards == [card])
-        #expect(loaded.repo == "jusso-dev/board-api")
+        #expect(loaded.repo == "example-user/board-api")
     }
 
     @Test("All-repository overview survives a disk round-trip")
@@ -255,13 +282,13 @@ struct AppModelTests {
     func pairingLoadsOverview() async throws {
         let model = makeModel(api: MockBoardAPIClient())
         _ = try await model.link(
-            baseURLString: "http://192.168.1.10:8787",
+            baseURLString: "http://192.168.50.10:8787",
             code: runtimePairCode()
         )
         #expect(model.phase == .linked)
         #expect(model.server?.name == "board-mock")
         #expect(model.selectedRepo == nil)
-        #expect(model.overviewCards.contains { $0.repo == "jusso-dev/board-api" && $0.card.number == 42 })
+        #expect(model.overviewCards.contains { $0.repo == "example-user/board-api" && $0.card.number == 42 })
         #expect(model.overviewCards.contains { $0.repo == "other-org/operations" && $0.card.number == 7 })
     }
 
@@ -269,7 +296,7 @@ struct AppModelTests {
     func overviewShowsCrossOrganisationJob() async throws {
         let model = makeModel(api: MockBoardAPIClient())
         _ = try await model.link(
-            baseURLString: "http://192.168.1.10:8787",
+            baseURLString: "http://192.168.50.10:8787",
             code: runtimePairCode()
         )
 
@@ -285,7 +312,7 @@ struct AppModelTests {
     func partialOverviewKeepsCardsVisible() async throws {
         let model = makeModel(api: MockBoardAPIClient(overviewUnavailableOwners: ["offline-org"]))
         _ = try await model.link(
-            baseURLString: "http://192.168.1.10:8787",
+            baseURLString: "http://192.168.50.10:8787",
             code: runtimePairCode()
         )
 
@@ -300,7 +327,7 @@ struct AppModelTests {
         let api = MockBoardAPIClient(delaysOverview: true)
         let model = makeModel(api: api)
         _ = try await model.link(
-            baseURLString: "http://192.168.1.10:8787",
+            baseURLString: "http://192.168.50.10:8787",
             code: runtimePairCode()
         )
         await api.resetOverviewRequestCount()
@@ -319,15 +346,15 @@ struct AppModelTests {
         let api = MockBoardAPIClient()
         let model = makeModel(api: api)
         _ = try await model.link(
-            baseURLString: "http://192.168.1.10:8787",
+            baseURLString: "http://192.168.50.10:8787",
             code: runtimePairCode()
         )
 
         let newCard = try sampleCard(number: 99, column: .ready)
-        await api.insertCard(newCard, repo: "jusso-dev/board-api")
+        await api.insertCard(newCard, repo: "example-user/board-api")
         await model.refreshWhenActive()
 
-        #expect(model.overviewCards.contains { $0.repo == "jusso-dev/board-api" && $0.card.number == 99 })
+        #expect(model.overviewCards.contains { $0.repo == "example-user/board-api" && $0.card.number == 99 })
     }
 
     @Test("Transient overview failure is retried once")
@@ -335,7 +362,7 @@ struct AppModelTests {
         let api = MockBoardAPIClient()
         let model = makeModel(api: api)
         _ = try await model.link(
-            baseURLString: "http://192.168.1.10:8787",
+            baseURLString: "http://192.168.50.10:8787",
             code: runtimePairCode()
         )
         await api.resetOverviewRequestCount()
@@ -353,7 +380,7 @@ struct AppModelTests {
         let api = MockBoardAPIClient()
         let model = makeModel(api: api)
         _ = try await model.link(
-            baseURLString: "http://192.168.1.10:8787",
+            baseURLString: "http://192.168.50.10:8787",
             code: runtimePairCode()
         )
         await api.failNextOverviewRequests(2)
@@ -370,7 +397,7 @@ struct AppModelTests {
         let api = MockBoardAPIClient()
         let model = makeModel(api: api)
         _ = try await model.link(
-            baseURLString: "http://192.168.1.10:8787",
+            baseURLString: "http://192.168.50.10:8787",
             code: runtimePairCode()
         )
         await api.failNextOverviewRequests(2)
@@ -387,24 +414,44 @@ struct AppModelTests {
     func failedMoveRollsBack() async throws {
         let model = makeModel(api: MockBoardAPIClient(failMoves: true))
         _ = try await model.link(
-            baseURLString: "http://192.168.1.10:8787",
+            baseURLString: "http://192.168.50.10:8787",
             code: runtimePairCode()
         )
-        await model.selectRepo("jusso-dev/board-api")
+        await model.selectRepo("example-user/board-api")
         #expect(model.card(number: 42)?.column == .backlog)
         let moved = await model.moveCard(number: 42, to: .ready)
         #expect(!moved)
         #expect(model.card(number: 42)?.column == .backlog)
     }
 
+    @Test("Posts and reloads a follow-up comment")
+    func postsFollowUpComment() async throws {
+        let model = makeModel(api: MockBoardAPIClient())
+        _ = try await model.link(
+            baseURLString: "http://192.168.50.10:8787",
+            code: runtimePairCode()
+        )
+        await model.selectRepo("example-user/board-api")
+
+        let posted = await model.addComment(
+            number: 42,
+            body: "  Please fix the reconnect path before review.  "
+        )
+
+        #expect(posted)
+        #expect(model.comments(number: 42).count == 1)
+        #expect(model.comments(number: 42).first?.author == "example-user")
+        #expect(model.comments(number: 42).first?.body == "Please fix the reconnect path before review.")
+    }
+
     @Test("A repository conflict returns the existing running job")
     func conflictShowsExistingJob() async throws {
         let model = makeModel(api: MockBoardAPIClient())
         _ = try await model.link(
-            baseURLString: "http://192.168.1.10:8787",
+            baseURLString: "http://192.168.50.10:8787",
             code: runtimePairCode()
         )
-        await model.selectRepo("jusso-dev/board-api")
+        await model.selectRepo("example-user/board-api")
         let first = try #require(await model.startJob(issue: 42, harness: .codex, prompt: "", crew: []))
         let second = try #require(await model.startJob(issue: 43, harness: .cursor, prompt: "", crew: []))
         #expect(first.id == second.id)
@@ -421,7 +468,7 @@ struct AppModelTests {
 }
 
 private func sampleCard(number: Int, column: BoardColumn) throws -> Card {
-    let url = try #require(URL(string: "https://github.com/jusso-dev/board-api/issues/\(number)"))
+    let url = try #require(URL(string: "https://github.com/example-user/board-api/issues/\(number)"))
     return Card(
         number: number,
         title: "Cached card",

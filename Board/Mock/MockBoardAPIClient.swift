@@ -10,6 +10,8 @@ actor MockBoardAPIClient: BoardAPIClientProtocol {
     private var overviewRequestCount = 0
     private var remainingOverviewFailures = 0
     private var healthFails = false
+    private var commentsByCard: [String: [IssueComment]] = [:]
+    private var nextCommentID: Int64 = 100
     private var jobValues: [JobRecord] = []
     private var eventValues: [UUID: [JobEvent]] = [:]
 
@@ -26,14 +28,14 @@ actor MockBoardAPIClient: BoardAPIClientProtocol {
         self.revealsCardOnSecondOverview = revealsCardOnSecondOverview
         let now = Date()
         self.cardsByRepo = [
-            "jusso-dev/board-api": [
+            "example-user/board-api": [
             Card(
                 number: 42,
                 title: "Add deployment health evidence",
                 body: "Record the live health response after each homelab deployment.",
                 column: .backlog,
                 labels: [BoardColumn.backlog.rawValue],
-                url: Self.url("https://github.com/jusso-dev/board-api/issues/42"),
+                url: Self.url("https://github.com/example-user/board-api/issues/42"),
                 createdAt: now.addingTimeInterval(-86_400),
                 updatedAt: now.addingTimeInterval(-3_600)
             ),
@@ -43,7 +45,7 @@ actor MockBoardAPIClient: BoardAPIClientProtocol {
                 body: "Prove the process group exits and the card returns to ready.",
                 column: .ready,
                 labels: [BoardColumn.ready.rawValue],
-                url: Self.url("https://github.com/jusso-dev/board-api/issues/43"),
+                url: Self.url("https://github.com/example-user/board-api/issues/43"),
                 createdAt: now.addingTimeInterval(-172_800),
                 updatedAt: now.addingTimeInterval(-7_200)
             )
@@ -109,22 +111,22 @@ actor MockBoardAPIClient: BoardAPIClientProtocol {
             tailscaleURL: Self.url("http://board.example.ts.net:8787"),
             tailscaleDNS: "board.example.ts.net",
             harnesses: Harness.allCases,
-            ghLogin: "jusso-dev"
+            ghLogin: "example-user"
         )
     }
 
     func repos(baseURL: URL) -> [Repo] {
         [
             Repo(
-                nameWithOwner: "jusso-dev/board-api",
+                nameWithOwner: "example-user/board-api",
                 description: "Rust homelab board runner API",
-                url: Self.url("https://github.com/jusso-dev/board-api"),
+                url: Self.url("https://github.com/example-user/board-api"),
                 isPrivate: false
             ),
             Repo(
-                nameWithOwner: "jusso-dev/board-ios",
+                nameWithOwner: "example-user/board-ios",
                 description: "Native iOS client for board-api",
-                url: Self.url("https://github.com/jusso-dev/board-ios"),
+                url: Self.url("https://github.com/example-user/board-ios"),
                 isPrivate: false
             ),
             Repo(
@@ -172,20 +174,20 @@ actor MockBoardAPIClient: BoardAPIClientProtocol {
             )
         }
         if delaysOverview {
-            try? await Task.sleep(for: .milliseconds(100))
+            try await Task.sleep(for: .milliseconds(100))
         }
         if revealsCardOnSecondOverview,
            overviewRequestCount >= 2,
-           !cardsByRepo["jusso-dev/board-api", default: []].contains(where: { $0.number == 99 }) {
+           !cardsByRepo["example-user/board-api", default: []].contains(where: { $0.number == 99 }) {
             let now = Date()
-            cardsByRepo["jusso-dev/board-api", default: []].append(
+            cardsByRepo["example-user/board-api", default: []].append(
                 Card(
                     number: 99,
                     title: "Added while Board was in the background",
                     body: "Foreground activation should fetch this card without a force quit.",
                     column: .ready,
                     labels: [BoardColumn.ready.rawValue],
-                    url: Self.url("https://github.com/jusso-dev/board-api/issues/99"),
+                    url: Self.url("https://github.com/example-user/board-api/issues/99"),
                     createdAt: now,
                     updatedAt: now
                 )
@@ -278,6 +280,61 @@ actor MockBoardAPIClient: BoardAPIClientProtocol {
             throw BoardAPIError.server(statusCode: 404, code: "not_found", message: "Card not found.")
         }
         return card
+    }
+
+    func comments(
+        baseURL: URL,
+        repo: String,
+        number: Int,
+        page: Int,
+        perPage: Int
+    ) -> CommentPage {
+        let values = commentsByCard[Self.commentKey(repo: repo, number: number), default: []]
+            .sorted { $0.id < $1.id }
+        let safePage = max(page, 1)
+        let safePerPage = min(max(perPage, 1), 50)
+        let start = (safePage - 1) * safePerPage
+        guard start < values.count else {
+            return CommentPage(items: [], page: safePage, perPage: safePerPage, hasMore: false)
+        }
+        let end = min(start + safePerPage, values.count)
+        return CommentPage(
+            items: Array(values[start..<end]),
+            page: safePage,
+            perPage: safePerPage,
+            hasMore: end < values.count
+        )
+    }
+
+    func createComment(
+        baseURL: URL,
+        repo: String,
+        number: Int,
+        request: CreateCommentRequest
+    ) throws -> IssueComment {
+        guard cardsByRepo[repo, default: []].contains(where: { $0.number == number }) else {
+            throw BoardAPIError.server(statusCode: 404, code: "not_found", message: "Card not found.")
+        }
+        let body = request.body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !body.isEmpty else {
+            throw BoardAPIError.server(statusCode: 400, code: "invalid_comment", message: "Comment must not be empty.")
+        }
+        let id = nextCommentID
+        nextCommentID += 1
+        let now = Date()
+        let value = IssueComment(
+            id: id,
+            author: "example-user",
+            body: body,
+            url: Self.url("https://github.com/\(repo)/issues/\(number)#issuecomment-\(id)"),
+            createdAt: now,
+            updatedAt: now
+        )
+        commentsByCard[Self.commentKey(repo: repo, number: number), default: []].append(value)
+        if let index = cardsByRepo[repo, default: []].firstIndex(where: { $0.number == number }) {
+            cardsByRepo[repo]?[index].updatedAt = now
+        }
+        return value
     }
 
     func jobs(baseURL: URL) -> [JobRecord] {
@@ -409,6 +466,10 @@ actor MockBoardAPIClient: BoardAPIClientProtocol {
             preconditionFailure("Invalid mock URL constant")
         }
         return url
+    }
+
+    private static func commentKey(repo: String, number: Int) -> String {
+        "\(repo)#\(number)"
     }
 
     private static func uuid(_ value: String) -> UUID {

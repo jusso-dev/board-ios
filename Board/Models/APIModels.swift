@@ -161,6 +161,22 @@ struct CardPage: Codable, Equatable, Sendable {
     let hasMore: Bool
 }
 
+struct IssueComment: Codable, Identifiable, Equatable, Sendable {
+    let id: Int64
+    let author: String?
+    let body: String
+    let url: URL
+    let createdAt: Date
+    let updatedAt: Date
+}
+
+struct CommentPage: Codable, Equatable, Sendable {
+    let items: [IssueComment]
+    let page: Int
+    let perPage: Int
+    let hasMore: Bool
+}
+
 struct RepositoryCard: Codable, Identifiable, Equatable, Hashable, Sendable {
     let repo: String
     var card: Card
@@ -186,6 +202,10 @@ struct CreateCardRequest: Codable, Equatable, Sendable {
 
 struct MoveCardRequest: Codable, Equatable, Sendable {
     let column: BoardColumn
+}
+
+struct CreateCommentRequest: Codable, Equatable, Sendable {
+    let body: String
 }
 
 struct CreateJobRequest: Codable, Equatable, Sendable {

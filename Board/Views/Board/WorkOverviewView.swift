@@ -59,7 +59,7 @@ struct WorkOverviewView: View {
         }
         .searchable(text: $searchText, prompt: "Search cards or repositories")
         .refreshable {
-            await model.reloadBoard()
+            await model.refreshFromUserGesture()
         }
         .overlay {
             if model.isLoadingOverview && model.overviewCards.isEmpty {

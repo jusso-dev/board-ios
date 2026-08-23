@@ -11,12 +11,12 @@
 		17776F8C63BFEC257A01C6BE /* BoardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AEDA2723F5365AFF3BF9876 /* BoardTests.swift */; };
 		1D40708EAC6990CE6DE35470 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E42046B3804D59F3D7994B91 /* SettingsView.swift */; };
 		20C0C9C280A5DF6D2CC11569 /* RepositoryPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 267BBA7DB49288BDF2D3CF65 /* RepositoryPickerView.swift */; };
-		2B5A682797D04870A675A3C5 /* WorkOverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E87E78AAEE943929421BA52 /* WorkOverviewView.swift */; };
 		304F8D2FBE3A4F82174C68DF /* CardCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E7EB070F1267290C2420981 /* CardCache.swift */; };
 		349730950A8F8668926C0A70 /* APIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 063D861009216F5DFD3BD990 /* APIModels.swift */; };
 		4C9E24ECBFA81887D99F39AD /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEC7B941ABEA9693356294B2 /* AppModel.swift */; };
 		4CE5709602EFFCF030246F9D /* ServerURLValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40875DB9324459E0500EB3AA /* ServerURLValidator.swift */; };
 		514166DDF63B864424521769 /* KanbanColumnView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23F0871F30E87F7433C19548 /* KanbanColumnView.swift */; };
+		5F87E8D61854BAB21324B4FB /* WorkOverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D4D2B2BAFE7A010C28B9F5F /* WorkOverviewView.swift */; };
 		61EB041890F7B6FB83374B1D /* RunJobSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEA3103B3E89848A0172F4DF /* RunJobSheet.swift */; };
 		6B2C6EC7E0E096E1AFBE657D /* MockBoardAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 236BCFD22E3D1105A14EC604 /* MockBoardAPIClient.swift */; };
 		6D0F24D9DA84B7ECED46FDAD /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BA3C802B107EAD3EE836F4C3 /* Assets.xcassets */; };
@@ -57,11 +57,11 @@
 		236BCFD22E3D1105A14EC604 /* MockBoardAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockBoardAPIClient.swift; sourceTree = "<group>"; };
 		23F0871F30E87F7433C19548 /* KanbanColumnView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KanbanColumnView.swift; sourceTree = "<group>"; };
 		267BBA7DB49288BDF2D3CF65 /* RepositoryPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepositoryPickerView.swift; sourceTree = "<group>"; };
-		9E87E78AAEE943929421BA52 /* WorkOverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkOverviewView.swift; sourceTree = "<group>"; };
 		37EF53EE2E1DAACAB2D08F70 /* ServerLinkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerLinkView.swift; sourceTree = "<group>"; };
 		40875DB9324459E0500EB3AA /* ServerURLValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerURLValidator.swift; sourceTree = "<group>"; };
 		4AEDA2723F5365AFF3BF9876 /* BoardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardTests.swift; sourceTree = "<group>"; };
 		51792AFDF8C565E0F2815774 /* CredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialStore.swift; sourceTree = "<group>"; };
+		5D4D2B2BAFE7A010C28B9F5F /* WorkOverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkOverviewView.swift; sourceTree = "<group>"; };
 		63723FC0725CA816A5D938C3 /* BoardTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BoardTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6A22200D9892FE680C7C17BB /* Board.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Board.entitlements; sourceTree = "<group>"; };
 		6E7EB070F1267290C2420981 /* CardCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardCache.swift; sourceTree = "<group>"; };
@@ -204,7 +204,7 @@
 				208FA8DAA432004A92985B8F /* CreateCardSheet.swift */,
 				23F0871F30E87F7433C19548 /* KanbanColumnView.swift */,
 				267BBA7DB49288BDF2D3CF65 /* RepositoryPickerView.swift */,
-				9E87E78AAEE943929421BA52 /* WorkOverviewView.swift */,
+				5D4D2B2BAFE7A010C28B9F5F /* WorkOverviewView.swift */,
 			);
 			path = Board;
 			sourceTree = "<group>";
@@ -398,12 +398,12 @@
 				514166DDF63B864424521769 /* KanbanColumnView.swift in Sources */,
 				6B2C6EC7E0E096E1AFBE657D /* MockBoardAPIClient.swift in Sources */,
 				20C0C9C280A5DF6D2CC11569 /* RepositoryPickerView.swift in Sources */,
-				2B5A682797D04870A675A3C5 /* WorkOverviewView.swift in Sources */,
 				02772143C8520F84A4269484 /* RootView.swift in Sources */,
 				61EB041890F7B6FB83374B1D /* RunJobSheet.swift in Sources */,
 				EF47F9D6BA94D00744E01595 /* ServerLinkView.swift in Sources */,
 				4CE5709602EFFCF030246F9D /* ServerURLValidator.swift in Sources */,
 				1D40708EAC6990CE6DE35470 /* SettingsView.swift in Sources */,
+				5F87E8D61854BAB21324B4FB /* WorkOverviewView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -495,7 +495,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = au.com.yumait.board.uitests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.board.uitests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = Board;
@@ -512,7 +512,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = au.com.yumait.board.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.board.tests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Board.app/Board";
@@ -529,7 +529,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = au.com.yumait.board.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.board.tests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Board.app/Board";
@@ -548,7 +548,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = au.com.yumait.board;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.board;
 				PRODUCT_NAME = Board;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -565,7 +565,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = au.com.yumait.board.uitests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.board.uitests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = Board;
@@ -653,7 +653,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = au.com.yumait.board;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.board;
 				PRODUCT_NAME = Board;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";

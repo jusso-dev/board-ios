@@ -30,13 +30,33 @@ final class BoardFlowUITests: XCTestCase {
         linkServer()
 
         XCTAssertTrue(element("work-overview").waitForExistence(timeout: 8))
-        let foregroundCard = element("overview-card-jusso-dev/board-api-99")
+        let foregroundCard = element("overview-card-example-user/board-api-99")
         XCTAssertFalse(foregroundCard.exists)
 
         XCUIDevice.shared.press(.home)
         app.activate()
 
         XCTAssertTrue(foregroundCard.waitForExistence(timeout: 8))
+    }
+
+    func testPullToRefreshLoadsWorkWithoutShowingOffline() throws {
+        app.launchArguments = ["-board-ui-testing", "-reset-state", "-reveal-card-on-foreground"]
+        app.launch()
+        linkServer()
+
+        XCTAssertTrue(element("work-overview").waitForExistence(timeout: 8))
+        let refreshedCard = element("overview-card-example-user/board-api-99")
+        XCTAssertFalse(refreshedCard.exists)
+
+        let overview = app.collectionViews["work-overview"]
+        XCTAssertTrue(overview.waitForExistence(timeout: 5))
+
+        let pullStart = overview.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2))
+        let pullEnd = overview.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8))
+        pullStart.press(forDuration: 0.1, thenDragTo: pullEnd)
+
+        XCTAssertTrue(refreshedCard.waitForExistence(timeout: 8))
+        XCTAssertFalse(element("offline-banner").exists)
     }
 
     private func searchAcrossOrganisations() {
@@ -58,17 +78,17 @@ final class BoardFlowUITests: XCTestCase {
         XCTAssertTrue(secondSearch.waitForExistence(timeout: 5))
         secondSearch.tap()
         secondSearch.typeText("board-api")
-        let boardAPI = app.buttons["repo-jusso-dev/board-api"]
+        let boardAPI = app.buttons["repo-example-user/board-api"]
         XCTAssertTrue(boardAPI.waitForExistence(timeout: 5))
         boardAPI.tap()
-        XCTAssertEqual(picker.value as? String, "jusso-dev/board-api")
+        XCTAssertEqual(picker.value as? String, "example-user/board-api")
     }
 
     private func linkServer() {
         let serverField = app.textFields["server-url-field"]
         XCTAssertTrue(serverField.waitForExistence(timeout: 5))
         serverField.tap()
-        serverField.typeText("http://192.168.1.10:8787")
+        serverField.typeText("http://192.168.50.10:8787")
 
         app.buttons["test-connection-button"].tap()
         XCTAssertTrue(element("connection-success").waitForExistence(timeout: 5))
@@ -119,6 +139,14 @@ final class BoardFlowUITests: XCTestCase {
 
         let runButton = app.buttons["run-card-button"]
         XCTAssertTrue(runButton.waitForExistence(timeout: 5))
+
+        let commentField = app.textFields["comment-body-field"]
+        XCTAssertTrue(commentField.waitForExistence(timeout: 5))
+        commentField.tap()
+        commentField.typeText("Please verify the follow-up fix.")
+        app.buttons["post-comment-button"].tap()
+        XCTAssertTrue(app.staticTexts["Please verify the follow-up fix."].waitForExistence(timeout: 5))
+
         runButton.tap()
 
         let prompt = app.textViews["job-prompt"]

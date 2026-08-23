@@ -10,6 +10,8 @@ protocol BoardAPIClientProtocol: Sendable {
     func createCard(baseURL: URL, request: CreateCardRequest) async throws -> Card
     func moveCard(baseURL: URL, repo: String, number: Int, column: BoardColumn) async throws -> Card
     func card(baseURL: URL, repo: String, number: Int) async throws -> Card
+    func comments(baseURL: URL, repo: String, number: Int, page: Int, perPage: Int) async throws -> CommentPage
+    func createComment(baseURL: URL, repo: String, number: Int, request: CreateCommentRequest) async throws -> IssueComment
     func jobs(baseURL: URL) async throws -> [JobRecord]
     func createJob(baseURL: URL, request: CreateJobRequest) async throws -> JobRecord
     func job(baseURL: URL, id: UUID) async throws -> JobRecord
@@ -153,6 +155,39 @@ actor BoardAPIClient: BoardAPIClientProtocol {
             baseURL: baseURL,
             path: "/v1/cards/\(number)",
             query: [URLQueryItem(name: "repo", value: repo)]
+        )
+    }
+
+    func comments(
+        baseURL: URL,
+        repo: String,
+        number: Int,
+        page: Int,
+        perPage: Int
+    ) async throws -> CommentPage {
+        try await perform(
+            baseURL: baseURL,
+            path: "/v1/cards/\(number)/comments",
+            query: [
+                URLQueryItem(name: "repo", value: repo),
+                URLQueryItem(name: "page", value: String(max(page, 1))),
+                URLQueryItem(name: "perPage", value: String(min(max(perPage, 1), 50)))
+            ]
+        )
+    }
+
+    func createComment(
+        baseURL: URL,
+        repo: String,
+        number: Int,
+        request: CreateCommentRequest
+    ) async throws -> IssueComment {
+        try await perform(
+            baseURL: baseURL,
+            path: "/v1/cards/\(number)/comments",
+            method: "POST",
+            query: [URLQueryItem(name: "repo", value: repo)],
+            body: try encode(request)
         )
     }
 

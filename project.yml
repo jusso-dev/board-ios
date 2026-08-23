@@ -1,7 +1,7 @@
 name: Board
 
 options:
-  bundleIdPrefix: au.com.yumait
+  bundleIdPrefix: com.example
   deploymentTarget:
     iOS: "18.0"
   createIntermediateGroups: true
@@ -27,7 +27,7 @@ targets:
           - Resources/Info.plist
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: au.com.yumait.board
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.board
         PRODUCT_NAME: Board
         INFOPLIST_FILE: Board/Resources/Info.plist
         CODE_SIGN_ENTITLEMENTS: Board/Resources/Board.entitlements
@@ -47,7 +47,7 @@ targets:
       - target: Board
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: au.com.yumait.board.tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.board.tests
         GENERATE_INFOPLIST_FILE: YES
 
   BoardUITests:
@@ -59,5 +59,5 @@ targets:
       - target: Board
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: au.com.yumait.board.uitests
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.board.uitests
         GENERATE_INFOPLIST_FILE: YES
