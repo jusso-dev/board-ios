@@ -133,7 +133,7 @@ After one client pairs, the server no longer prints a first-client code. Existin
 
 ## Repository selection and search
 
-Board opens with **All work** selected. This is the cross-repository queue returned by Board API 0.6.0. Every row shows its `owner/repository`, issue number, column, latest harness/job state, and a pull-request link when one was actually recorded. The summary at the top counts running, pending, review, and affected repositories. Cards are grouped in operational order: Running, Ready, Review, Backlog, then Done.
+Board opens with **All work** selected. This is the cross-repository queue returned by Board API 0.8.0. Every row shows its `owner/repository`, issue number, column, latest harness/job state, and a pull-request link when one was actually recorded. The summary at the top counts running, pending, review, and affected repositories. Cards are grouped in operational order: Running, Ready, Review, Backlog, then Done.
 
 The repository button is now a filter, not a required first choice. Choose **All work** to return to the overview, or choose one repository for its five-column kanban. The sheet search is always visible and matches:
 
@@ -188,7 +188,7 @@ Open a card and tap Run, then choose:
 
 `POST /v1/jobs` starts the work on the Ubuntu guest. The job screen consumes `GET /v1/jobs/{id}/events` as a server-sent event stream and shows status and log lines. Cancel calls `POST /v1/jobs/{id}/cancel`.
 
-Only one job may run per repository. A `409 Conflict` makes the app show the existing job rather than pretending a second run started. A successful Board API 0.2.0 job has a non-null `prUrl`; the app displays a labelled pull-request link. Failed jobs state whether no pull request was opened or finalisation failed after one was created. If an older or inconsistent server reports `succeeded` with a null `prUrl`, the app shows an orange unverified warning instead of presenting that state as delivered work.
+Only one job may be queued or running per repository. Different repositories can run in parallel up to the server's configured limit, and excess work remains visibly queued. A `409 Conflict` makes the app show the existing same-repository job rather than pretending a second run started. A successful job has a non-null `prUrl`; the app displays a labelled pull-request link. Failed jobs state whether no pull request was opened or finalisation failed after one was created. If an older or inconsistent server reports `succeeded` with a null `prUrl`, the app shows an orange unverified warning instead of presenting that state as delivered work.
 
 ## Network and ATS policy
 
